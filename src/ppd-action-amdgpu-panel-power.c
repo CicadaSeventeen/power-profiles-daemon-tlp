@@ -43,10 +43,9 @@ struct _PpdActionAmdgpuPanelPower
   PpdProfile last_profile;
 
   GUdevClient *client;
-  GDBusProxy *proxy;
-  guint watcher_id;
 
   gint panel_power_saving;
+  gboolean valid_battery;
   gboolean on_battery;
 };
 
@@ -175,7 +174,7 @@ ppd_action_amdgpu_panel_power_activate_profile (PpdAction   *action,
   PpdActionAmdgpuPanelPower *self = PPD_ACTION_AMDGPU_PANEL_POWER (action);
   self->last_profile = profile;
 
-  if (self->proxy == NULL) {
+  if (!self->valid_battery) {
     g_debug ("upower not available; battery data might be stale");
     return TRUE;
   }
@@ -183,28 +182,29 @@ ppd_action_amdgpu_panel_power_activate_profile (PpdAction   *action,
   return ppd_action_amdgpu_panel_update_target (self, error);
 }
 
-
-static void
-upower_properties_changed (GDBusProxy *proxy,
-                           GVariant *changed_properties,
-                           GStrv invalidated_properties,
-                           PpdActionAmdgpuPanelPower *self)
+static gboolean
+ppd_action_amdgpu_panel_power_power_changed (PpdAction             *action,
+                                             PpdPowerChangedReason  reason,
+                                             GError               **error)
 {
-  g_autoptr (GVariant) battery_val = NULL;
-  g_autoptr (GError) error = NULL;
-  gboolean new_on_battery;
+  PpdActionAmdgpuPanelPower *self = PPD_ACTION_AMDGPU_PANEL_POWER (action);
 
-  if (proxy != NULL)
-    battery_val = g_dbus_proxy_get_cached_property (proxy, "OnBattery");
-  new_on_battery = battery_val ? g_variant_get_boolean (battery_val) : FALSE;
+  switch (reason) {
+  case PPD_POWER_CHANGED_REASON_UNKNOWN:
+    self->valid_battery = FALSE;
+    return TRUE;
+  case PPD_POWER_CHANGED_REASON_AC:
+    self->on_battery = FALSE;
+    break;
+  case PPD_POWER_CHANGED_REASON_BATTERY:
+    self->on_battery = TRUE;
+    break;
+  default:
+    g_assert_not_reached ();
+  }
 
-  if (self->on_battery == new_on_battery)
-    return;
-
-  g_debug ("OnBattery: %d -> %d", self->on_battery, new_on_battery);
-  self->on_battery = new_on_battery;
-  if (!ppd_action_amdgpu_panel_update_target (self, &error))
-    g_warning ("failed to update target: %s", error->message);
+  self->valid_battery = TRUE;
+  return ppd_action_amdgpu_panel_update_target (self, error);
 }
 
 static void
@@ -261,58 +261,12 @@ ppd_action_amdgpu_panel_power_probe (PpdAction *action)
 }
 
 static void
-upower_name_vanished (GDBusConnection *connection,
-                      const gchar     *name,
-                      gpointer         user_data)
-{
-  PpdActionAmdgpuPanelPower *self = user_data;
-
-  g_debug ("%s vanished", UPOWER_DBUS_NAME);
-
-  /* reset */
-  g_clear_pointer (&self->proxy, g_object_unref);
-  upower_properties_changed (NULL, NULL, NULL, self);
-}
-
-static void
-upower_name_appeared (GDBusConnection *connection,
-                      const gchar     *name,
-                      const gchar     *name_owner,
-                      gpointer         user_data)
-{
-  PpdActionAmdgpuPanelPower *self = user_data;
-  g_autoptr (GError) error = NULL;
-
-  g_debug ("%s appeared", UPOWER_DBUS_NAME);
-  self->proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
-                                               G_DBUS_PROXY_FLAGS_NONE,
-                                               NULL,
-                                               UPOWER_DBUS_NAME,
-                                               UPOWER_DBUS_PATH,
-                                               UPOWER_DBUS_INTERFACE,
-                                               NULL,
-                                               &error);
-  if (self->proxy == NULL) {
-    g_debug ("failed to connect to upower: %s", error->message);
-    return;
-  }
-
-  g_signal_connect (self->proxy,
-                    "g-properties-changed",
-                    G_CALLBACK(upower_properties_changed),
-                    self);
-  upower_properties_changed (self->proxy, NULL, NULL, self);
-}
-
-static void
 ppd_action_amdgpu_panel_power_finalize (GObject *object)
 {
   PpdActionAmdgpuPanelPower *action;
 
   action = PPD_ACTION_AMDGPU_PANEL_POWER (object);
-  g_clear_handle_id (&action->watcher_id, g_bus_unwatch_name);
   g_clear_object (&action->client);
-  g_clear_pointer (&action->proxy, g_object_unref);
   G_OBJECT_CLASS (ppd_action_amdgpu_panel_power_parent_class)->finalize (object);
 }
 
@@ -329,6 +283,7 @@ ppd_action_amdgpu_panel_power_class_init (PpdActionAmdgpuPanelPowerClass *klass)
   driver_class = PPD_ACTION_CLASS(klass);
   driver_class->probe = ppd_action_amdgpu_panel_power_probe;
   driver_class->activate_profile = ppd_action_amdgpu_panel_power_activate_profile;
+  driver_class->power_changed = ppd_action_amdgpu_panel_power_power_changed;
 }
 
 static void
@@ -339,12 +294,4 @@ ppd_action_amdgpu_panel_power_init (PpdActionAmdgpuPanelPower *self)
   self->client = g_udev_client_new (subsystem);
   g_signal_connect (G_OBJECT (self->client), "uevent",
                     G_CALLBACK (udev_uevent_cb), self);
-
-  self->watcher_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
-                                       UPOWER_DBUS_NAME,
-                                       G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                       upower_name_appeared,
-                                       upower_name_vanished,
-                                       self,
-                                       NULL);
 }
