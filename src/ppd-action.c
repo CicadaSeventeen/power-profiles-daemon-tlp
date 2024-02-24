@@ -149,6 +149,18 @@ ppd_action_activate_profile (PpdAction  *action,
   return PPD_ACTION_GET_CLASS (action)->activate_profile (action, profile, error);
 }
 
+gboolean ppd_action_power_changed (PpdAction             *action,
+                                   PpdPowerChangedReason  reason,
+                                   GError               **error)
+{
+  g_return_val_if_fail (PPD_IS_ACTION (action), FALSE);
+
+  if (!PPD_ACTION_GET_CLASS (action)->power_changed)
+    return TRUE;
+
+  return PPD_ACTION_GET_CLASS (action)->power_changed (action, reason, error);
+}
+
 const char *
 ppd_action_get_action_name (PpdAction *action)
 {

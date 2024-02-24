@@ -36,6 +36,10 @@
 
 #define POWER_PROFILES_RESOURCES_PATH "/org/freedesktop/UPower/PowerProfiles"
 
+#define UPOWER_DBUS_NAME                  "org.freedesktop.UPower"
+#define UPOWER_DBUS_PATH                  "/org/freedesktop/UPower"
+#define UPOWER_DBUS_INTERFACE             "org.freedesktop.UPower"
+
 #ifndef POLKIT_HAS_AUTOPOINTERS
 /* FIXME: Remove this once we're fine to depend on polkit 0.114 */
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PolkitAuthorizationResult, g_object_unref)
@@ -63,6 +67,10 @@ typedef struct {
   GPtrArray *actions;
   GHashTable *profile_holds;
   GLogLevelFlags log_level;
+
+  GDBusProxy *upower_proxy;
+  guint watcher_id;
+  gboolean on_battery;
 } PpdApp;
 
 typedef struct {
@@ -996,6 +1004,114 @@ bus_acquired_handler (GDBusConnection *connection,
   data->app->connection = g_object_ref (connection);
 }
 
+static void
+upower_properties_changed (GDBusProxy *proxy,
+                           GVariant *changed_properties,
+                           GStrv invalidated_properties,
+                           PpdApp *data)
+{
+  g_autoptr (GVariant) battery_val = NULL;
+  PpdPowerChangedReason  reason;
+  guint i;
+
+  if (proxy != NULL)
+    battery_val = g_dbus_proxy_get_cached_property (proxy, "OnBattery");
+
+  data->on_battery = battery_val ? g_variant_get_boolean (battery_val) : FALSE;
+
+  if (!battery_val)
+    reason = PPD_POWER_CHANGED_REASON_UNKNOWN;
+  else if (data->on_battery)
+    reason = PPD_POWER_CHANGED_REASON_BATTERY;
+  else
+    reason = PPD_POWER_CHANGED_REASON_AC;
+
+  for (i = 0; i < data->actions->len; i++) {
+    g_autoptr (GError) error = NULL;
+    PpdAction *action;
+    gboolean ret;
+
+    action = g_ptr_array_index (data->actions, i);
+
+    ret = ppd_action_power_changed (action, reason, &error);
+    if (!ret) {
+      g_warning ("failed to update action %s: %s",
+                 ppd_action_get_action_name (action),
+                 error->message);
+      continue;
+    }
+  }
+
+  if (PPD_IS_DRIVER_CPU (data->cpu_driver)) {
+    g_autoptr (GError) error = NULL;
+    gboolean ret;
+
+    ret = ppd_driver_power_changed (PPD_DRIVER (data->cpu_driver), reason, &error);
+    if (!ret) {
+      g_warning ("failed to update driver %s: %s",
+                 ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)),
+                 error->message);
+    }
+  }
+
+  if (PPD_IS_DRIVER_PLATFORM (data->platform_driver)) {
+    g_autoptr (GError) error = NULL;
+    gboolean ret;
+
+    ret = ppd_driver_power_changed (PPD_DRIVER (data->platform_driver), reason, &error);
+    if (!ret) {
+      g_warning ("failed to update driver %s: %s",
+                 ppd_driver_get_driver_name (PPD_DRIVER (data->platform_driver)),
+                 error->message);
+    }
+
+  }
+}
+
+static void
+upower_name_vanished (GDBusConnection *connection,
+                      const gchar     *name,
+                      gpointer         user_data)
+{
+  PpdApp *data = user_data;
+
+  g_debug ("%s vanished", UPOWER_DBUS_NAME);
+
+  /* reset */
+  g_clear_pointer (&data->upower_proxy, g_object_unref);
+  upower_properties_changed (NULL, NULL, NULL, data);
+}
+
+static void
+upower_name_appeared (GDBusConnection *connection,
+                      const gchar     *name,
+                      const gchar     *name_owner,
+                      gpointer         user_data)
+{
+  PpdApp *data = user_data;
+  g_autoptr (GError) error = NULL;
+
+  g_debug ("%s appeared", UPOWER_DBUS_NAME);
+  data->upower_proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
+                                                      G_DBUS_PROXY_FLAGS_NONE,
+                                                      NULL,
+                                                      UPOWER_DBUS_NAME,
+                                                      UPOWER_DBUS_PATH,
+                                                      UPOWER_DBUS_INTERFACE,
+                                                      NULL,
+                                                      &error);
+  if (data->upower_proxy == NULL) {
+    g_debug ("failed to connect to upower: %s", error->message);
+    return;
+  }
+
+  g_signal_connect (data->upower_proxy,
+                    "g-properties-changed",
+                    G_CALLBACK(upower_properties_changed),
+                    data);
+  upower_properties_changed (data->upower_proxy, NULL, NULL, data);
+}
+
 static gboolean
 has_required_drivers (PpdApp *data)
 {
@@ -1163,6 +1279,15 @@ start_profile_drivers (PpdApp *data)
   if (!activate_target_profile (data, data->active_profile, PPD_PROFILE_ACTIVATION_REASON_RESET, &initial_error))
     g_warning ("Failed to activate initial profile: %s", initial_error->message);
 
+  /* start watching for power changes */
+  data->watcher_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
+                                       UPOWER_DBUS_NAME,
+                                       G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                       upower_name_appeared,
+                                       upower_name_vanished,
+                                       data,
+                                       NULL);
+
   send_dbus_event (data, PROP_ALL);
 
   data->was_started = TRUE;
@@ -1181,6 +1306,7 @@ restart_profile_drivers (void)
   stop_profile_drivers (ppd_app);
   start_profile_drivers (ppd_app);
 }
+
 
 static void
 name_acquired_handler (GDBusConnection *connection,
@@ -1259,6 +1385,8 @@ free_app_data (PpdApp *data)
   g_clear_handle_id (&data->name_id, g_bus_unown_name);
   g_clear_handle_id (&data->legacy_name_id, g_bus_unown_name);
 
+  g_clear_handle_id (&data->watcher_id, g_bus_unwatch_name);
+  g_clear_pointer (&data->upower_proxy, g_object_unref);
   g_clear_pointer (&data->config_path, g_free);
   g_clear_pointer (&data->config, g_key_file_unref);
   g_ptr_array_free (data->probed_drivers, TRUE);
