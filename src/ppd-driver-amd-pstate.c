@@ -38,6 +38,7 @@ struct _PpdDriverAmdPstate
 
   PpdProfile activated_profile;
   GList *epp_devices; /* GList of paths */
+  gboolean on_battery;
 };
 
 G_DEFINE_TYPE (PpdDriverAmdPstate, ppd_driver_amd_pstate, PPD_TYPE_DRIVER_CPU)
@@ -166,7 +167,7 @@ profile_to_gov_pref (PpdProfile profile)
 }
 
 static const char *
-profile_to_epp_pref (PpdProfile profile)
+profile_to_epp_pref (PpdProfile profile, gboolean battery)
 {
   /* Note that we don't check "energy_performance_available_preferences"
    * as all the values are always available */
@@ -174,7 +175,7 @@ profile_to_epp_pref (PpdProfile profile)
   case PPD_PROFILE_POWER_SAVER:
     return "power";
   case PPD_PROFILE_BALANCED:
-    return "balance_performance";
+    return battery ? "balance_power" : "balance_performance";
   case PPD_PROFILE_PERFORMANCE:
     return "performance";
   }
@@ -185,10 +186,14 @@ profile_to_epp_pref (PpdProfile profile)
 static gboolean
 apply_pref_to_devices (GList       *devices,
                        PpdProfile   profile,
+                       gboolean     battery,
                        GError     **error)
 {
   gboolean ret = TRUE;
   GList *l;
+
+  if (profile == PPD_PROFILE_UNSET)
+    return TRUE;
 
   for (l = devices; l != NULL; l = l->next) {
     const char *base = l->data;
@@ -207,7 +212,7 @@ apply_pref_to_devices (GList       *devices,
                             "energy_performance_preference",
                             NULL);
 
-    ret = ppd_utils_write (epp, profile_to_epp_pref (profile), error);
+    ret = ppd_utils_write (epp, profile_to_epp_pref (profile, battery), error);
     if (!ret)
       break;
   }
@@ -227,12 +232,13 @@ ppd_driver_amd_pstate_activate_profile (PpdDriver                    *driver,
   g_return_val_if_fail (pstate->epp_devices != NULL, FALSE);
 
   if (pstate->epp_devices) {
-    ret = apply_pref_to_devices (pstate->epp_devices, profile, error);
+    ret = apply_pref_to_devices (pstate->epp_devices, profile, pstate->on_battery, error);
     if (!ret && pstate->activated_profile != PPD_PROFILE_UNSET) {
       g_autoptr(GError) error_local = NULL;
       /* reset back to previous */
       if (!apply_pref_to_devices (pstate->epp_devices,
                                   pstate->activated_profile,
+                                  pstate->on_battery,
                                   &error_local))
         g_warning ("failed to restore previous profile: %s", error_local->message);
       return ret;
@@ -243,6 +249,31 @@ ppd_driver_amd_pstate_activate_profile (PpdDriver                    *driver,
     pstate->activated_profile = profile;
 
   return ret;
+}
+
+static gboolean
+ppd_driver_amd_pstate_power_changed (PpdDriver             *driver,
+                                     PpdPowerChangedReason  reason,
+                                     GError               **error)
+{
+  PpdDriverAmdPstate *pstate = PPD_DRIVER_AMD_PSTATE (driver);
+
+  switch (reason) {
+  case PPD_POWER_CHANGED_REASON_UNKNOWN:
+  case PPD_POWER_CHANGED_REASON_AC:
+    pstate->on_battery = FALSE;
+    break;
+  case PPD_POWER_CHANGED_REASON_BATTERY:
+    pstate->on_battery = TRUE;
+    break;
+  default:
+    g_assert_not_reached ();
+  }
+
+  return apply_pref_to_devices (pstate->epp_devices,
+                                pstate->activated_profile,
+                                pstate->on_battery,
+                                error);
 }
 
 static void
@@ -268,6 +299,7 @@ ppd_driver_amd_pstate_class_init (PpdDriverAmdPstateClass *klass)
   driver_class = PPD_DRIVER_CLASS (klass);
   driver_class->probe = ppd_driver_amd_pstate_probe;
   driver_class->activate_profile = ppd_driver_amd_pstate_activate_profile;
+  driver_class->power_changed = ppd_driver_amd_pstate_power_changed;
 }
 
 static void

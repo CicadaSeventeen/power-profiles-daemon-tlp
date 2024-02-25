@@ -1280,6 +1280,76 @@ class Tests(dbusmock.DBusTestCase):
         profiles = self.get_dbus_property("Profiles")
         self.assertEqual(len(profiles), 2)
 
+    def test_amd_pstate_upower(self):
+        """Switching between balance_power and balance_performance based on battery"""
+        # Create 2 CPUs with preferences
+        dir1 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy0/"
+        )
+        os.makedirs(dir1)
+        self.write_file_contents(os.path.join(dir1, "scaling_governor"), "powersave\n")
+        self.write_file_contents(
+            os.path.join(dir1, "energy_performance_preference"), "performance\n"
+        )
+        dir2 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy1/"
+        )
+        os.makedirs(dir2)
+        self.write_file_contents(os.path.join(dir2, "scaling_governor"), "powersave\n")
+        self.write_file_contents(
+            os.path.join(dir2, "energy_performance_preference"), "performance\n"
+        )
+
+        # Create AMD P-State configuration
+        pstate_dir = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/amd_pstate"
+        )
+        os.makedirs(pstate_dir)
+        self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
+
+        # desktop PM profile
+        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
+        os.makedirs(dir3)
+        self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
+
+        (
+            upowerd,
+            garbage,  # pylint: disable=unused-variable
+        ) = self.spawn_server_template(
+            "upower",
+            {"DaemonVersion": "0.99", "OnBattery": True},
+            stdout=subprocess.PIPE,
+        )
+
+        self.start_daemon()
+
+        profiles = self.get_dbus_property("Profiles")
+        self.assertEqual(len(profiles), 3)
+
+        self.assertEqual(profiles[0]["Driver"], "multiple")
+        self.assertEqual(profiles[0]["CpuDriver"], "amd_pstate")
+        self.assertEqual(profiles[0]["Profile"], "power-saver")
+
+        energy_prefs = os.path.join(dir2, "energy_performance_preference")
+        scaling_governor = os.path.join(dir2, "scaling_governor")
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_power")
+        self.assert_file_eventually_contains(scaling_governor, "powersave")
+
+        upowerd.terminate()
+        upowerd.wait()
+        upowerd.stdout.close()
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
+        upowerd, garbage = self.spawn_server_template(
+            "upower",
+            {"DaemonVersion": "0.99", "OnBattery": False},
+            stdout=subprocess.PIPE,
+        )
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
     def test_amdgpu_panel_power(self):
         """Verify AMDGPU Panel power actions"""
         amdgpu_panel_power_savings = "amdgpu/panel_power_savings"
