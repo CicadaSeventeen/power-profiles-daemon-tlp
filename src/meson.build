@@ -104,10 +104,15 @@ executable('power-profiles-daemon',
   install_dir: libexecdir
 )
 
-powerprofilesctl = files('powerprofilesctl')
-install_data(powerprofilesctl,
-             install_dir: get_option('bindir')
+powerprofilesctl = configure_file(
+  input: files('powerprofilesctl'),
+  output: 'powerprofilesctl',
+  configuration: {
+    'VERSION': meson.project_version(),
+  },
+  install_dir: get_option('bindir')
 )
+
 if pylint.found()
   test('pylint-powerprofilesctl',
        pylint,

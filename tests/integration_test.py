@@ -1630,8 +1630,8 @@ class Tests(dbusmock.DBusTestCase):
         self.start_daemon()
         self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
 
-        sourcedir = os.getenv("top_srcdir", ".")
-        tool_path = os.path.join(sourcedir, "src", "powerprofilesctl")
+        builddir = os.getenv("top_builddir", ".")
+        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
 
         with subprocess.Popen(
             [tool_path, "launch", "-p", "power-saver", "sleep", "3600"],
@@ -1864,8 +1864,8 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        sourcedir = os.getenv("top_srcdir", ".")
-        tool_path = os.path.join(sourcedir, "src", "powerprofilesctl")
+        builddir = os.getenv("top_builddir", ".")
+        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
 
         cmd = subprocess.run([tool_path, "version"], check=True)
         self.assertEqual(cmd.returncode, 0)
@@ -1875,8 +1875,8 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        sourcedir = os.getenv("top_srcdir", ".")
-        tool_path = os.path.join(sourcedir, "src", "powerprofilesctl")
+        builddir = os.getenv("top_builddir", ".")
+        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
 
         cmd = subprocess.run([tool_path, "list"], capture_output=True, check=True)
         self.assertEqual(cmd.returncode, 0)
@@ -1887,8 +1887,8 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        sourcedir = os.getenv("top_srcdir", ".")
-        tool_path = os.path.join(sourcedir, "src", "powerprofilesctl")
+        builddir = os.getenv("top_builddir", ".")
+        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
 
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "balanced")
 
@@ -1910,8 +1910,8 @@ class Tests(dbusmock.DBusTestCase):
     def test_powerprofilesctl_error(self):
         """Check that powerprofilesctl returns 1 rather than an exception on error"""
 
-        sourcedir = os.getenv("top_srcdir", ".")
-        tool_path = os.path.join(sourcedir, "src", "powerprofilesctl")
+        builddir = os.getenv("top_builddir", ".")
+        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
 
         with self.assertRaises(subprocess.CalledProcessError) as error:
             subprocess.check_output(

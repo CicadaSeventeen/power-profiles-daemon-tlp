@@ -37,9 +37,13 @@ def command(func):
 
 @command
 def _version(args):  # pylint: disable=unused-argument
-    proxy = get_proxy()
-    ver = proxy.Get("(ss)", PP_IFACE, "Version")
-    print(ver)
+    client_version = "@VERSION@"
+    try:
+        proxy = get_proxy()
+        daemon_ver = proxy.Get("(ss)", PP_IFACE, "Version")
+    except GLib.Error:
+        daemon_ver = "unknown"
+    print(f"client: {client_version}\ndaemon: {daemon_ver}")
 
 
 @command
