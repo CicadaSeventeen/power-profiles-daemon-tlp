@@ -60,7 +60,7 @@ ppd_action_set_property (GObject        *object,
 
   switch (property_id) {
   case PROP_ACTION_NAME:
-    g_assert (priv->action_name == NULL);
+    g_return_if_fail (priv->action_name == NULL);
     priv->action_name = g_value_dup_string (value);
     break;
   default:

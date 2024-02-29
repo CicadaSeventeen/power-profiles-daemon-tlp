@@ -292,12 +292,12 @@ send_dbus_event_iface (PpdApp         *data,
   GVariantBuilder props_builder;
   GVariant *props_changed = NULL;
 
-  g_assert (data->connection);
+  g_return_if_fail (data->connection);
 
   if (mask == 0)
     return;
 
-  g_assert ((mask & PROP_ALL) != 0);
+  g_return_if_fail ((mask & PROP_ALL) != 0);
 
   g_variant_builder_init (&props_builder, G_VARIANT_TYPE ("a{sv}"));
 
@@ -826,7 +826,7 @@ handle_get_property (GDBusConnection *connection,
 {
   PpdApp *data = user_data;
 
-  g_assert (data->connection);
+  g_return_val_if_fail (data->connection, NULL);
 
   if (g_strcmp0 (property_name, "ActiveProfile") == 0)
     return g_variant_new_string (get_active_profile (data));
@@ -860,7 +860,7 @@ handle_set_property (GDBusConnection  *connection,
   PpdApp *data = user_data;
   const char *profile;
 
-  g_assert (data->connection);
+  g_return_val_if_fail (data->connection, FALSE);
 
   if (g_strcmp0 (property_name, "ActiveProfile") != 0) {
     g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
@@ -887,7 +887,7 @@ handle_method_call (GDBusConnection       *connection,
                     gpointer               user_data)
 {
   PpdApp *data = user_data;
-  g_assert (data->connection);
+  g_return_if_fail (data->connection);
 
   if (!g_str_equal (interface_name, POWER_PROFILES_IFACE_NAME) &&
       !g_str_equal (interface_name, POWER_PROFILES_LEGACY_IFACE_NAME)) {
@@ -1228,7 +1228,7 @@ start_profile_drivers (PpdApp *data)
       else if (PPD_IS_DRIVER_PLATFORM (driver))
         g_set_object (&data->platform_driver, PPD_DRIVER_PLATFORM (driver));
       else
-        g_assert_not_reached ();
+        g_return_if_reached ();
 
       g_signal_connect (G_OBJECT (driver), "notify::performance-degraded",
                         G_CALLBACK (driver_performance_degraded_changed_cb), data);
@@ -1257,7 +1257,7 @@ start_profile_drivers (PpdApp *data)
       continue;
     }
 
-    g_assert_not_reached ();
+    g_return_if_reached ();
   }
 
   if (!has_required_drivers (data)) {

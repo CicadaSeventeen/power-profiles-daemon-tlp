@@ -316,7 +316,7 @@ profile_to_epp_pref (PpdProfile profile)
     return "performance";
   }
 
-  g_assert_not_reached ();
+  g_return_val_if_reached (NULL);
 }
 
 static const char *
@@ -333,7 +333,7 @@ profile_to_epb_pref (PpdProfile profile)
     return "0";
   }
 
-  g_assert_not_reached ();
+  g_return_val_if_reached (NULL);
 }
 
 static gboolean

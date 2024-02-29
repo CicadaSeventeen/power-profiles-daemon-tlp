@@ -63,9 +63,11 @@ ppd_driver_set_property (GObject        *object,
   PpdDriver *driver = PPD_DRIVER (object);
   PpdDriverPrivate *priv = PPD_DRIVER_GET_PRIVATE (driver);
 
+  g_return_if_fail (PPD_IS_DRIVER (object));
+
   switch (property_id) {
   case PROP_DRIVER_NAME:
-    g_assert (priv->driver_name == NULL);
+    g_return_if_fail (priv->driver_name == NULL);
     priv->driver_name = g_value_dup_string (value);
     break;
   case PROP_PROFILES:
@@ -331,6 +333,6 @@ ppd_profile_activation_reason_to_str (PpdProfileActivationReason reason)
   case PPD_PROFILE_ACTIVATION_REASON_PROGRAM_HOLD:
     return "program-hold";
   default:
-    g_assert_not_reached ();
+    g_return_val_if_reached (NULL);
   }
 }

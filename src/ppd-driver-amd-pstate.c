@@ -163,7 +163,7 @@ profile_to_gov_pref (PpdProfile profile)
     return "performance";
   }
 
-  g_assert_not_reached ();
+  g_return_val_if_reached (NULL);
 }
 
 static const char *
@@ -180,7 +180,7 @@ profile_to_epp_pref (PpdProfile profile, gboolean battery)
     return "performance";
   }
 
-  g_assert_not_reached ();
+  g_return_val_if_reached (NULL);
 }
 
 static gboolean

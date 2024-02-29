@@ -71,7 +71,7 @@ profile_to_acpi_platform_profile_value (PpdDriverPlatformProfile *self,
     return "performance";
   }
 
-  g_assert_not_reached ();
+  g_return_val_if_reached (NULL);
 }
 
 static PpdProfile
@@ -90,10 +90,8 @@ acpi_platform_profile_value_to_profile (const char *str)
   case 'p':
     return PPD_PROFILE_PERFORMANCE;
   default:
-    g_debug ("Got unsupported performance_profile value '%s'", str);
+    g_return_val_if_reached (PPD_PROFILE_UNSET);
   }
-
-  return PPD_PROFILE_UNSET;
 }
 
 static PpdProfile
