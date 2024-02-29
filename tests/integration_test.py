@@ -99,21 +99,8 @@ class Tests(dbusmock.DBusTestCase):
         os.environ["G_DEBUG"] = "fatal_warnings"
 
         # set up a fake system D-BUS
-        cls.test_bus = Gio.TestDBus.new(Gio.TestDBusFlags.NONE)
-        cls.test_bus.up()
-        try:
-            del os.environ["DBUS_SESSION_BUS_ADDRESS"]
-        except KeyError:
-            pass
-        os.environ["DBUS_SYSTEM_BUS_ADDRESS"] = cls.test_bus.get_bus_address()
-
+        cls.start_system_bus()
         cls.dbus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
-        cls.dbus_con = cls.get_dbus(True)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.test_bus.down()
-        dbusmock.DBusTestCase.tearDownClass()
 
     def setUp(self):
         """Set up a local umockdev testbed.
