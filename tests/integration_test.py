@@ -1682,6 +1682,16 @@ class Tests(dbusmock.DBusTestCase):
 
         self.stop_daemon()
 
+    def test_unknown_args(self):
+        self.create_platform_profile()
+        self.start_daemon()
+        self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
+
+        builddir = os.getenv("top_builddir", ".")
+        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
+
+        subprocess.check_call([tool_path, "launch", "true", "--foo"])
+
     def test_vanishing_hold(self):
         self.create_platform_profile()
         self.start_daemon()

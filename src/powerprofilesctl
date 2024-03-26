@@ -205,10 +205,12 @@ def get_parser():
 
 
 def main():
-    args = get_parser().parse_args()
+    args, unknown = get_parser().parse_known_args()
     # default behavior is to run list if no command is given
     if not args.command:
         args.func = _list
+    if args.command == "launch":
+        args.arguments += unknown
     args.func(args)
 
 
