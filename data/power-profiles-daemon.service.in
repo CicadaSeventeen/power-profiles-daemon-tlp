@@ -14,14 +14,28 @@ StateDirectory=power-profiles-daemon
 #Environment="G_MESSAGES_DEBUG=all"
 
 # Lockdown
+DevicePolicy=closed
+KeyringMode=private
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectClock=yes
+ProtectControlGroups=yes
+ProtectHome=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectKernelModules=yes
+ProtectProc=invisible
 ProtectSystem=strict
-ProtectControlGroups=true
-ProtectHome=true
-ProtectKernelModules=true
-PrivateTmp=true
+RemoveIPC=yes
 RestrictAddressFamilies=AF_UNIX AF_LOCAL AF_NETLINK
 MemoryDenyWriteExecute=true
 RestrictRealtime=true
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
 
 [Install]
 WantedBy=graphical.target
