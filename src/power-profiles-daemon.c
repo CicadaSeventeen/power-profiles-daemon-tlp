@@ -1503,8 +1503,7 @@ int main (int argc, char **argv)
   g_unix_signal_add (SIGINT, quit_signal_callback, data);
 
   /* redirect all domains */
-  if (verbose && !g_log_writer_is_journald (fileno (stdout)))
-    g_log_set_default_handler (debug_handler_cb, data);
+  g_log_set_default_handler (debug_handler_cb, data);
 
   g_debug ("Starting power-profiles-daemon version "VERSION);
 
