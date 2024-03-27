@@ -955,7 +955,7 @@ name_lost_handler (GDBusConnection *connection,
   PpdBusOwnData *data = user_data;
   PpdApp *app = data->app;
 
-  g_debug ("power-profiles-daemon is already running, or it cannot own its D-Bus name. Verify installation.");
+  g_warning ("power-profiles-daemon is already running, or it cannot own its D-Bus name. Verify installation.");
   if (!app->was_started)
     app->ret = 1;
 
