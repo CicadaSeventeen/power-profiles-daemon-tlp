@@ -1505,7 +1505,7 @@ int main (int argc, char **argv)
   /* redirect all domains */
   g_log_set_default_handler (debug_handler_cb, data);
 
-  g_debug ("Starting power-profiles-daemon version "VERSION);
+  g_info ("Starting power-profiles-daemon version "VERSION);
 
   load_configuration (data);
   ppd_app = data;
