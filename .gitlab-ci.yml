@@ -84,6 +84,7 @@ build_stable:
         _build/python-coverage/*
     - coverage3 xml --data-file=$python_coverage_data
         -o $python_coverage_data.xml
+    - sed "s,_build/src/,src/,g" -i $python_coverage_data.xml
     - coverage3 report --data-file=$python_coverage_data
     - coverage3 html --data-file=$python_coverage_data
         -d _build/meson-logs/python-coverage-html
