@@ -17,6 +17,11 @@ variables:
                      python3-gobject
                      python3-pylint
                      umockdev
+  TEST_DEBUG_DEPENDENCIES: glib2
+                           glibc
+                           libgudev
+                           upower
+                           polkit-gnome
 
 workflow:
   rules:
@@ -32,11 +37,13 @@ workflow:
     - if command -v dnf5 &>/dev/null; then ln -sfv $(command -v dnf5) /usr/local/bin/dnf; fi
     - dnf update -y
     - dnf install -y $DEPENDENCIES $JOB_DEPS
+    # dnf5 does not include debuginfo-install yet, so let's use dnf4 instead.
     - if [ -n "$JOB_DEBUG_DEPS" ]; then
-        if command -v dnf5
-        dnf install -y dnf4
-        dnf4 update -y
-        dnf4 install -y "dnf-command(debuginfo-install);
+        if ! command -v dnf4 &>/dev/null; then
+          dnf install -y dnf4;
+          dnf4 update -y;
+        fi;
+        dnf4 install -y "dnf-command(debuginfo-install)";
         dnf4 debuginfo-install -y $JOB_DEBUG_DEPS;
       fi
 
@@ -57,6 +64,7 @@ build_stable:
               argparse-manpage
               python3-coverage
               python3-shtab
+    JOB_DEBUG_DEPS: $TEST_DEBUG_DEPENDENCIES
   extends:
     - .install-deps
   script:
@@ -104,6 +112,7 @@ address_sanitizer:
     JOB_DEPS: $TEST_DEPENDENCIES
               libasan
               libubsan
+    JOB_DEBUG_DEPS: $TEST_DEBUG_DEPENDENCIES
   extends:
     - .install-deps
   script:
@@ -122,6 +131,7 @@ valgrind:
   variables:
     JOB_DEPS: $TEST_DEPENDENCIES
               valgrind
+    JOB_DEBUG_DEPS: $TEST_DEBUG_DEPENDENCIES
   extends:
     - .install-deps
   script:
