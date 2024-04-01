@@ -29,11 +29,15 @@ workflow:
   before_script:
     - echo 8096000 > /proc/sys/fs/inotify/max_user_instances
     - mkdir -m 700 $TMPDIR -p
+    - if command -v dnf5 &>/dev/null; then ln -sfv $(command -v dnf5) /usr/local/bin/dnf; fi
     - dnf update -y
-    - if [ -x /bin/dnf ]; then
-        dnf install -y $DEPENDENCIES $JOB_DEPS;
-      else
-        dnf5 install -y $DEPENDENCIES $JOB_DEPS;
+    - dnf install -y $DEPENDENCIES $JOB_DEPS
+    - if [ -n "$JOB_DEBUG_DEPS" ]; then
+        if command -v dnf5
+        dnf install -y dnf4
+        dnf4 update -y
+        dnf4 install -y "dnf-command(debuginfo-install);
+        dnf4 debuginfo-install -y $JOB_DEBUG_DEPS;
       fi
 
 pre_commit:
