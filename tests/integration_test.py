@@ -1817,6 +1817,32 @@ class Tests(dbusmock.DBusTestCase):
 
         self.stop_daemon()
 
+    def test_launch_sigint_wrapper(self):
+        self.create_platform_profile()
+        self.start_daemon()
+        self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
+
+        with subprocess.Popen(
+            self.powerprofilesctl_command() + ["launch", "sleep", "3600"],
+        ) as launch_process:
+            time.sleep(1)
+            launch_process.send_signal(signal.SIGINT)
+            retcode = launch_process.wait()
+            self.assertEqual(retcode, -signal.SIGINT)
+
+    def test_launch_sigabrt_wrapper(self):
+        self.create_platform_profile()
+        self.start_daemon()
+        self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
+
+        with subprocess.Popen(
+            self.powerprofilesctl_command() + ["launch", "sleep", "3600"],
+        ) as launch_process:
+            time.sleep(1)
+            launch_process.send_signal(signal.SIGABRT)
+            retcode = launch_process.wait()
+            self.assertEqual(retcode, -signal.SIGABRT)
+
     def test_hold_priority(self):
         """power-saver should take priority over performance"""
         self.create_platform_profile()

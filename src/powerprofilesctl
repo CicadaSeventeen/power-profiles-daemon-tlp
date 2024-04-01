@@ -131,7 +131,14 @@ def _launch(args):
         def receive_signal(signum, _stack):
             launched_app.send_signal(signum)
 
-        signal.signal(signal.SIGTERM, receive_signal)
+        redirected_signals = [
+            signal.SIGTERM,
+            signal.SIGINT,
+            signal.SIGABRT,
+        ]
+
+        for sig in redirected_signals:
+            signal.signal(sig, receive_signal)
 
         try:
             launched_app.wait()
@@ -139,7 +146,8 @@ def _launch(args):
         except KeyboardInterrupt:
             ret = launched_app.returncode
 
-        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+        for sig in redirected_signals:
+            signal.signal(sig, signal.SIG_DFL)
 
     proxy.ReleaseProfile("(u)", cookie)
 
