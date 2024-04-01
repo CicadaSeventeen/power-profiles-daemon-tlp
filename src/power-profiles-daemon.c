@@ -457,8 +457,6 @@ activate_target_profile (PpdApp                      *data,
                          GError                     **error)
 {
   PpdProfile current_profile = data->active_profile;
-  gboolean cpu_set = TRUE;
-  gboolean platform_set = TRUE;
 
   g_debug ("Setting active profile '%s' for reason '%s' (current: '%s')",
            ppd_profile_to_str (target_profile),
@@ -466,43 +464,36 @@ activate_target_profile (PpdApp                      *data,
            ppd_profile_to_str (current_profile));
 
   /* Try CPU first */
-  if (driver_profile_support (PPD_DRIVER (data->cpu_driver), target_profile))
-    cpu_set = ppd_driver_activate_profile (PPD_DRIVER (data->cpu_driver),
-                                           target_profile, reason, error);
-
-  if (!cpu_set) {
+  if (driver_profile_support (PPD_DRIVER (data->cpu_driver), target_profile) &&
+      !ppd_driver_activate_profile (PPD_DRIVER (data->cpu_driver),
+                                    target_profile, reason, error)) {
     g_prefix_error (error, "Failed to activate CPU driver '%s': ",
                     ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)));
     return FALSE;
   }
 
   /* Then try platform */
-  if (driver_profile_support (PPD_DRIVER (data->platform_driver), target_profile)) {
-    platform_set = ppd_driver_activate_profile (PPD_DRIVER (data->platform_driver),
-                                                target_profile, reason, error);
-  }
+  if (driver_profile_support (PPD_DRIVER (data->platform_driver), target_profile) &&
+      !ppd_driver_activate_profile (PPD_DRIVER (data->platform_driver),
+                                                target_profile, reason, error)) {
+    g_autoptr(GError) recovery_error = NULL;
 
-  if (!platform_set) {
     g_prefix_error (error, "Failed to activate platform driver '%s': ",
                     ppd_driver_get_driver_name (PPD_DRIVER (data->platform_driver)));
 
-    /* Try to recover */
-    if (cpu_set && PPD_IS_DRIVER (data->cpu_driver)) {
-      g_autoptr(GError) recovery_error = NULL;
+    if (!PPD_IS_DRIVER (data->cpu_driver))
+      return FALSE;
 
-      g_debug ("Reverting CPU driver '%s' to profile '%s'",
-               ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)),
-               ppd_profile_to_str (current_profile));
+    g_debug ("Reverting CPU driver '%s' to profile '%s'",
+              ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)),
+              ppd_profile_to_str (current_profile));
 
-      if (!ppd_driver_activate_profile (PPD_DRIVER (data->cpu_driver),
-                                        current_profile, PPD_PROFILE_ACTIVATION_REASON_INTERNAL,
-                                        &recovery_error)) {
-        g_prefix_error (error, "Failed to revert CPU driver '%s': ",
-                        ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)));
-        g_warning ("Failed to revert CPU driver '%s': %s",
-                   ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)),
-                   recovery_error->message);
-      }
+    if (!ppd_driver_activate_profile (PPD_DRIVER (data->cpu_driver),
+                                      current_profile, PPD_PROFILE_ACTIVATION_REASON_INTERNAL,
+                                      &recovery_error)) {
+      g_warning ("Failed to revert CPU driver '%s': %s",
+                  ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)),
+                  recovery_error->message);
     }
 
     return FALSE;
