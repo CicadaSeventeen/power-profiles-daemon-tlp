@@ -7,6 +7,7 @@ if bashcomp.found()
 
   custom_target('bash-completion',
     output: 'powerprofilesctl',
+    env: {'PPD_COMPLETIONS_GENERATION': '1'},
     command: [
       generate_completion,
       'bash',
@@ -20,6 +21,7 @@ endif
 if zshcomp
   custom_target('zsh-completion',
     output: '_powerprofilesctl',
+    env: {'PPD_COMPLETIONS_GENERATION': '1'},
     command: [
       generate_completion,
       'zsh',
