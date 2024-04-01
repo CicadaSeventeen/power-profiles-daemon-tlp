@@ -204,13 +204,28 @@ def get_parser():
     return parser
 
 
+def check_unknown_args(args, unknown_args, cmd):
+    if cmd != "launch":
+        return False
+
+    for idx, unknown_arg in enumerate(unknown_args):
+        arg = args[idx]
+        if arg == cmd:
+            return True
+        if unknown_arg == arg:
+            return False
+
+    return True
+
+
 def main():
     parser = get_parser()
     args, unknown = parser.parse_known_args()
     # default behavior is to run list if no command is given
     if not args.command:
         args.func = _list
-    if args.command == "launch":
+
+    if check_unknown_args(sys.argv[1:], unknown, args.command):
         args.arguments += unknown
         unknown = []
 
