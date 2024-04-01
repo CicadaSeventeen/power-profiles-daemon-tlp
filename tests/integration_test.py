@@ -139,7 +139,6 @@ class Tests(dbusmock.DBusTestCase):
                 sys.stderr.write("------------------------------\n")
 
     def tearDown(self):
-        del self.testbed
         self.stop_daemon()
 
         if self.polkitd:
@@ -153,10 +152,13 @@ class Tests(dbusmock.DBusTestCase):
         self.obj_polkit = None
 
         del self.tp_acpi
+
         try:
             os.remove(self.testbed.get_root_dir() + "/" + "ppd_test_conf.ini")
-        except AttributeError:
+        except (AttributeError, FileNotFoundError):
             pass
+        finally:
+            del self.testbed
 
     #
     # Daemon control and D-BUS I/O
