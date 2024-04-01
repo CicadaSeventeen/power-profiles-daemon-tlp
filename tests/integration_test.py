@@ -1727,6 +1727,28 @@ class Tests(dbusmock.DBusTestCase):
             )
             self.assertEqual(tmpf.readlines(), ["--foo --bar -v arg\n"])
 
+    def test_unknown_action(self):
+        self.create_platform_profile()
+        self.start_daemon()
+        self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            tool_cmd = self.powerprofilesctl_command()
+            subprocess.check_output(
+                tool_cmd + ["hopefully-invalid-action"], stderr=subprocess.PIPE
+            )
+
+    def test_unknown_list_argument(self):
+        self.create_platform_profile()
+        self.start_daemon()
+        self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
+
+        with self.assertRaises(subprocess.CalledProcessError):
+            subprocess.check_output(
+                self.powerprofilesctl_command() + ["list", "--invalid-argument"],
+                stderr=subprocess.PIPE,
+            )
+
     def test_vanishing_hold(self):
         self.create_platform_profile()
         self.start_daemon()

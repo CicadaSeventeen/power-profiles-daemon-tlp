@@ -205,12 +205,19 @@ def get_parser():
 
 
 def main():
-    args, unknown = get_parser().parse_known_args()
+    parser = get_parser()
+    args, unknown = parser.parse_known_args()
     # default behavior is to run list if no command is given
     if not args.command:
         args.func = _list
     if args.command == "launch":
         args.arguments += unknown
+        unknown = []
+
+    if unknown:
+        msg = argparse._("unrecognized arguments: %s")
+        parser.error(msg % " ".join(unknown))
+
     args.func(args)
 
 
