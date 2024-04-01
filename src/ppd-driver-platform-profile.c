@@ -224,6 +224,7 @@ ppd_driver_platform_profile_activate_profile (PpdDriver                   *drive
                                               GError                     **error)
 {
   PpdDriverPlatformProfile *self = PPD_DRIVER_PLATFORM_PROFILE (driver);
+  g_autoptr(GError) local_error = NULL;
   g_autofree char *platform_profile_path = NULL;
   const char *platform_profile_value;
 
@@ -245,8 +246,11 @@ ppd_driver_platform_profile_activate_profile (PpdDriver                   *drive
 
   g_signal_handler_block (G_OBJECT (self->acpi_platform_profile_mon), self->acpi_platform_profile_changed_id);
   platform_profile_path = ppd_utils_get_sysfs_path (ACPI_PLATFORM_PROFILE_PATH);
-  if (!ppd_utils_write (platform_profile_path, profile_to_acpi_platform_profile_value (self, profile), error)) {
-    g_debug ("Failed to write to acpi_platform_profile: %s", (* error)->message);
+  if (!ppd_utils_write (platform_profile_path,
+                        profile_to_acpi_platform_profile_value (self, profile), &local_error)) {
+    g_debug ("Failed to write to acpi_platform_profile: %s", local_error->message);
+    g_propagate_prefixed_error (error, g_steal_pointer (&local_error),
+                                "Failed to write to acpi_platform_profile: ");
     g_signal_handler_unblock (G_OBJECT (self->acpi_platform_profile_mon), self->acpi_platform_profile_changed_id);
     return FALSE;
   }
