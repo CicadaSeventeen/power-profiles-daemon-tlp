@@ -1,4 +1,11 @@
 generate_completion = [python3, powerprofilesctl, '--print-completion']
+
+completions_common = {
+  'env': {'PPD_COMPLETIONS_GENERATION': '1'},
+  'capture': true,
+  'install': true,
+}
+
 if bashcomp.found()
   completions_dir = bashcomp.get_variable(pkgconfig: 'completionsdir',
     pkgconfig_define: bashcomp.version().version_compare('>= 2.10') ?
@@ -7,27 +14,23 @@ if bashcomp.found()
 
   custom_target('bash-completion',
     output: 'powerprofilesctl',
-    env: {'PPD_COMPLETIONS_GENERATION': '1'},
     command: [
       generate_completion,
       'bash',
     ],
-    capture: true,
-    install: true,
     install_dir: completions_dir,
+    kwargs: completions_common,
   )
 endif
 
 if zshcomp
   custom_target('zsh-completion',
     output: '_powerprofilesctl',
-    env: {'PPD_COMPLETIONS_GENERATION': '1'},
     command: [
       generate_completion,
       'zsh',
     ],
-    capture: true,
-    install: true,
     install_dir: get_option('zshcomp'),
+    kwargs: completions_common,
   )
 endif
