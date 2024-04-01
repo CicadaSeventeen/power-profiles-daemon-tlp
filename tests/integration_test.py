@@ -357,6 +357,25 @@ class Tests(dbusmock.DBusTestCase):
         builddir = os.getenv("top_builddir", ".")
         return os.path.join(builddir, "src", "powerprofilesctl")
 
+    def python_coverage_commands(self):
+        coverage = os.getenv("PPD_PYTHON_COVERAGE")
+        if not coverage:
+            return []
+
+        builddir = os.getenv("top_builddir", ".")
+        data_file = os.path.join(builddir, "python-coverage", self.id() + ".coverage")
+        # We also may need to use "--parallel-mode" if running with
+        # meson test --repeat, but this is not a priority for now.
+        return [
+            coverage,
+            "run",
+            f"--data-file={data_file}",
+            f"--include={builddir}/*",
+        ]
+
+    def powerprofilesctl_command(self):
+        return self.python_coverage_commands() + [self.powerprofilesctl_path()]
+
     def assert_eventually(self, condition, message=None, timeout=5000):
         """Assert that condition function eventually returns True.
 
@@ -1701,9 +1720,9 @@ class Tests(dbusmock.DBusTestCase):
         self.start_daemon()
         self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
 
-        tool_path = self.powerprofilesctl_path()
+        tool_cmd = self.powerprofilesctl_command()
         with subprocess.Popen(
-            [tool_path, "launch", "-p", "power-saver", "sleep", "3600"],
+            tool_cmd + ["launch", "-p", "power-saver", "sleep", "3600"],
             stdout=sys.stdout,
             stderr=sys.stderr,
         ) as launch_process:
@@ -1933,7 +1952,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        cmd = subprocess.run([self.powerprofilesctl_path(), "version"], check=True)
+        cmd = subprocess.run(self.powerprofilesctl_command() + ["version"], check=True)
         self.assertEqual(cmd.returncode, 0)
 
     def test_powerprofilesctl_list_command(self):
@@ -1941,8 +1960,8 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        tool_path = self.powerprofilesctl_path()
-        cmd = subprocess.run([tool_path, "list"], capture_output=True, check=True)
+        tool_cmd = self.powerprofilesctl_command()
+        cmd = subprocess.run(tool_cmd + ["list"], capture_output=True, check=True)
         self.assertEqual(cmd.returncode, 0)
         self.assertIn("* balanced", cmd.stdout.decode("utf-8"))
 
@@ -1953,41 +1972,41 @@ class Tests(dbusmock.DBusTestCase):
 
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "balanced")
 
-        tool_path = self.powerprofilesctl_path()
-        cmd = subprocess.run([tool_path, "get"], capture_output=True, check=True)
+        tool_cmd = self.powerprofilesctl_command()
+        cmd = subprocess.run(tool_cmd + ["get"], capture_output=True, check=True)
         self.assertEqual(cmd.returncode, 0)
         self.assertEqual(cmd.stdout, b"balanced\n")
 
         cmd = subprocess.run(
-            [tool_path, "set", "power-saver"], capture_output=True, check=True
+            tool_cmd + ["set", "power-saver"], capture_output=True, check=True
         )
         self.assertEqual(cmd.returncode, 0)
 
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "power-saver")
 
-        cmd = subprocess.run([tool_path, "get"], capture_output=True, check=True)
+        cmd = subprocess.run(tool_cmd + ["get"], capture_output=True, check=True)
         self.assertEqual(cmd.returncode, 0)
         self.assertEqual(cmd.stdout, b"power-saver\n")
 
     def test_powerprofilesctl_error(self):
         """Check that powerprofilesctl returns 1 rather than an exception on error"""
 
-        tool_path = self.powerprofilesctl_path()
+        tool_cmd = self.powerprofilesctl_command()
         with self.assertRaises(subprocess.CalledProcessError) as error:
             subprocess.check_output(
-                [tool_path, "list"], stderr=subprocess.PIPE, universal_newlines=True
+                tool_cmd + ["list"], stderr=subprocess.PIPE, universal_newlines=True
             )
         self.assertNotIn("Traceback", error.exception.stderr)
 
         with self.assertRaises(subprocess.CalledProcessError) as error:
             subprocess.check_output(
-                [tool_path, "get"], stderr=subprocess.PIPE, universal_newlines=True
+                tool_cmd + ["get"], stderr=subprocess.PIPE, universal_newlines=True
             )
         self.assertNotIn("Traceback", error.exception.stderr)
 
         with self.assertRaises(subprocess.CalledProcessError) as error:
             subprocess.check_output(
-                [tool_path, "set", "not-a-profile"],
+                tool_cmd + ["set", "not-a-profile"],
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
             )
@@ -1995,7 +2014,7 @@ class Tests(dbusmock.DBusTestCase):
 
         with self.assertRaises(subprocess.CalledProcessError) as error:
             subprocess.check_output(
-                [tool_path, "list-holds"],
+                tool_cmd + ["list-holds"],
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
             )
@@ -2003,7 +2022,7 @@ class Tests(dbusmock.DBusTestCase):
 
         with self.assertRaises(subprocess.CalledProcessError) as error:
             subprocess.check_output(
-                [tool_path, "launch", "-p", "power-saver", "sleep", "1"],
+                tool_cmd + ["launch", "-p", "power-saver", "sleep", "1"],
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
             )
@@ -2012,7 +2031,7 @@ class Tests(dbusmock.DBusTestCase):
         self.start_daemon()
         with self.assertRaises(subprocess.CalledProcessError) as error:
             subprocess.check_output(
-                [tool_path, "set", "not-a-profile"],
+                tool_cmd + ["set", "not-a-profile"],
                 stderr=subprocess.PIPE,
                 universal_newlines=True,
             )

@@ -64,6 +64,16 @@ endforeach
 
 envs.set('PPD_LD_PRELOAD', ' '.join(ppd_tests_ld_preload))
 
+coverage_args = []
+python3_coverage = find_program([
+    'python3-coverage',
+    'coverage3',
+    'coverage',
+    ], required: false)
+if python3_coverage.found()
+    envs.set('PPD_PYTHON_COVERAGE', python3_coverage.full_path())
+endif
+
 foreach ut: unit_tests
     test(ut,
          python3,
