@@ -2,7 +2,6 @@ image: fedora:rawhide
 
 variables:
   DEPENDENCIES: gcc
-                gcovr
                 pkgconfig(udev)
                 pkgconfig(systemd)
                 pkgconfig(gio-2.0)
@@ -50,6 +49,7 @@ pre_commit:
 build_stable:
   variables:
     JOB_DEPS: $TEST_DEPENDENCIES
+              gcovr
               argparse-manpage
               python3-coverage
               python3-shtab
