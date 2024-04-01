@@ -139,7 +139,7 @@ def _launch(args):
             ret = launched_app.returncode
     proxy.ReleaseProfile("(u)", cookie)
 
-    return ret
+    sys.exit(ret)
 
 
 def get_parser():

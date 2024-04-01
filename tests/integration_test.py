@@ -1760,6 +1760,18 @@ class Tests(dbusmock.DBusTestCase):
                 tool_cmd + ["--foo-arg", "launch", "true"], stderr=subprocess.PIPE
             )
 
+    def test_launch_with_command_failure(self):
+        self.create_platform_profile()
+        self.start_daemon()
+        self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
+
+        tool_cmd = self.powerprofilesctl_command()
+        cmd = subprocess.run(tool_cmd + ["launch", "false"], check=False)
+        self.assertEqual(cmd.returncode, 1)
+
+        cmd = subprocess.run(tool_cmd + ["launch", "sh", "-c", "exit 55"], check=False)
+        self.assertEqual(cmd.returncode, 55)
+
     def test_vanishing_hold(self):
         self.create_platform_profile()
         self.start_daemon()
@@ -1780,7 +1792,8 @@ class Tests(dbusmock.DBusTestCase):
 
             # Make sure to handle vanishing clients
             launch_process.terminate()
-            self.assertEqual(launch_process.wait(), 0)
+            retcode = launch_process.wait()
+            self.assertTrue(os.WIFSIGNALED(retcode))
 
         holds = self.get_dbus_property("ActiveProfileHolds")
         self.assertEqual(len(holds), 0)
