@@ -353,6 +353,10 @@ class Tests(dbusmock.DBusTestCase):
         os.remove(os.path.join(acpi_dir, "platform_profile"))
         os.removedirs(acpi_dir)
 
+    def powerprofilesctl_path(self):
+        builddir = os.getenv("top_builddir", ".")
+        return os.path.join(builddir, "src", "powerprofilesctl")
+
     def assert_eventually(self, condition, message=None, timeout=5000):
         """Assert that condition function eventually returns True.
 
@@ -1697,9 +1701,7 @@ class Tests(dbusmock.DBusTestCase):
         self.start_daemon()
         self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
 
-        builddir = os.getenv("top_builddir", ".")
-        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
-
+        tool_path = self.powerprofilesctl_path()
         with subprocess.Popen(
             [tool_path, "launch", "-p", "power-saver", "sleep", "3600"],
             stdout=sys.stdout,
@@ -1931,10 +1933,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        builddir = os.getenv("top_builddir", ".")
-        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
-
-        cmd = subprocess.run([tool_path, "version"], check=True)
+        cmd = subprocess.run([self.powerprofilesctl_path(), "version"], check=True)
         self.assertEqual(cmd.returncode, 0)
 
     def test_powerprofilesctl_list_command(self):
@@ -1942,9 +1941,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        builddir = os.getenv("top_builddir", ".")
-        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
-
+        tool_path = self.powerprofilesctl_path()
         cmd = subprocess.run([tool_path, "list"], capture_output=True, check=True)
         self.assertEqual(cmd.returncode, 0)
         self.assertIn("* balanced", cmd.stdout.decode("utf-8"))
@@ -1954,11 +1951,9 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        builddir = os.getenv("top_builddir", ".")
-        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
-
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "balanced")
 
+        tool_path = self.powerprofilesctl_path()
         cmd = subprocess.run([tool_path, "get"], capture_output=True, check=True)
         self.assertEqual(cmd.returncode, 0)
         self.assertEqual(cmd.stdout, b"balanced\n")
@@ -1977,9 +1972,7 @@ class Tests(dbusmock.DBusTestCase):
     def test_powerprofilesctl_error(self):
         """Check that powerprofilesctl returns 1 rather than an exception on error"""
 
-        builddir = os.getenv("top_builddir", ".")
-        tool_path = os.path.join(builddir, "src", "powerprofilesctl")
-
+        tool_path = self.powerprofilesctl_path()
         with self.assertRaises(subprocess.CalledProcessError) as error:
             subprocess.check_output(
                 [tool_path, "list"], stderr=subprocess.PIPE, universal_newlines=True
