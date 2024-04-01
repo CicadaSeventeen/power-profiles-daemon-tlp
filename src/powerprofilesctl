@@ -37,7 +37,7 @@ def command(func):
 
 
 @command
-def _version(args):  # pylint: disable=unused-argument
+def _version(_args):
     client_version = "@VERSION@"
     try:
         proxy = get_proxy()
@@ -48,7 +48,7 @@ def _version(args):  # pylint: disable=unused-argument
 
 
 @command
-def _get(args):  # pylint: disable=unused-argument
+def _get(_args):
     proxy = get_proxy()
     profile = proxy.Get("(ss)", PP_IFACE, "ActiveProfile")
     print(profile)
@@ -68,7 +68,7 @@ def get_profiles_property(prop):
 
 
 @command
-def _list(args):  # pylint: disable=unused-argument
+def _list(_args):
     profiles = get_profiles_property("Profiles")
     reason = get_proxy().Get("(ss)", PP_IFACE, "PerformanceDegraded")
     degraded = reason != ""
@@ -91,7 +91,7 @@ def _list(args):  # pylint: disable=unused-argument
 
 
 @command
-def _list_holds(args):  # pylint: disable=unused-argument
+def _list_holds(_args):
     holds = get_profiles_property("ActiveProfileHolds")
 
     index = 0
