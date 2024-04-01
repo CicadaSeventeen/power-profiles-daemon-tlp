@@ -487,7 +487,7 @@ activate_target_profile (PpdApp                      *data,
                     ppd_driver_get_driver_name (PPD_DRIVER (data->platform_driver)));
 
     /* Try to recover */
-    if (cpu_set) {
+    if (cpu_set && PPD_IS_DRIVER (data->cpu_driver)) {
       g_autoptr(GError) recovery_error = NULL;
 
       g_debug ("Reverting CPU driver '%s' to profile '%s'",
