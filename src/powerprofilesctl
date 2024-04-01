@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import os
 import signal
 import subprocess
 import sys
@@ -124,20 +125,28 @@ def _launch(args):
     )
     cookie = proxy.HoldProfile("(sss)", profile, reason, appid)
 
-    # Kill child when we go away
-    def receive_signal(_signum, _stack):
-        launched_app.terminate()
-
-    signal.signal(signal.SIGTERM, receive_signal)
-
     # print (f'Got {cookie} for {profile} hold')
     with subprocess.Popen(args.arguments) as launched_app:
+        # Redirect the same signal to the child
+        def receive_signal(signum, _stack):
+            launched_app.send_signal(signum)
+
+        signal.signal(signal.SIGTERM, receive_signal)
+
         try:
             launched_app.wait()
             ret = launched_app.returncode
         except KeyboardInterrupt:
             ret = launched_app.returncode
+
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
+
     proxy.ReleaseProfile("(u)", cookie)
+
+    if ret < 0:
+        # Use standard POSIX signal exit code.
+        os.kill(os.getpid(), -ret)
+        return
 
     sys.exit(ret)
 

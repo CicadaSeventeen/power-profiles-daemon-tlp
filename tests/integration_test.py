@@ -21,6 +21,7 @@
 
 import os
 import subprocess
+import signal
 import sys
 import tempfile
 import time
@@ -1625,9 +1626,9 @@ class Tests(dbusmock.DBusTestCase):
 
         released_cookie = None
 
-        def signal_cb(_, sender, signal, params):
+        def signal_cb(_, sender, signal_name, params):
             nonlocal released_cookie
-            if signal == "ProfileReleased":
+            if signal_name == "ProfileReleased":
                 released_cookie = params
 
         self.addCleanup(
@@ -1772,6 +1773,22 @@ class Tests(dbusmock.DBusTestCase):
         cmd = subprocess.run(tool_cmd + ["launch", "sh", "-c", "exit 55"], check=False)
         self.assertEqual(cmd.returncode, 55)
 
+    def test_launch_with_command_signaled(self):
+        self.create_platform_profile()
+        self.start_daemon()
+        self.assert_eventually(lambda: self.get_dbus_property("ActiveProfile"))
+
+        tool_cmd = self.powerprofilesctl_command()
+        cmd = subprocess.run(
+            tool_cmd + ["launch", "sh", "-c", f"kill -{signal.SIGKILL} $$"], check=False
+        )
+        self.assertEqual(cmd.returncode, -signal.SIGKILL)
+
+        cmd = subprocess.run(
+            tool_cmd + ["launch", "sh", "-c", f"kill -{signal.SIGINT} $$"], check=False
+        )
+        self.assertEqual(cmd.returncode, -signal.SIGINT)
+
     def test_vanishing_hold(self):
         self.create_platform_profile()
         self.start_daemon()
@@ -1793,7 +1810,7 @@ class Tests(dbusmock.DBusTestCase):
             # Make sure to handle vanishing clients
             launch_process.terminate()
             retcode = launch_process.wait()
-            self.assertTrue(os.WIFSIGNALED(retcode))
+            self.assertEqual(retcode, -signal.SIGTERM)
 
         holds = self.get_dbus_property("ActiveProfileHolds")
         self.assertEqual(len(holds), 0)
