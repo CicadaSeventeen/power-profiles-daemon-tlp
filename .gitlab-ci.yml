@@ -51,6 +51,7 @@ build_stable:
   variables:
     JOB_DEPS: $TEST_DEPENDENCIES
               argparse-manpage
+              python3-coverage
               python3-shtab
   extends:
     - .install-deps
@@ -66,6 +67,14 @@ build_stable:
     - meson test -C _build --print-errorlogs
     - .ci/fail_skipped_tests.py _build/meson-logs/testlog.junit.xml
     - ninja -C _build coverage
+    - python_coverage_data=_build/meson-logs/python.coverage
+    - coverage3 combine --data-file=$python_coverage_data
+        _build/python-coverage/*
+    - coverage3 xml --data-file=$python_coverage_data
+        -o $python_coverage_data.xml
+    - coverage3 report --data-file=$python_coverage_data
+    - coverage3 html --data-file=$python_coverage_data
+        -d _build/meson-logs/python-coverage-html
     - cat _build/meson-logs/coverage.txt || true
     - meson install -C _build
     - ninja -C _build uninstall -v
@@ -74,14 +83,16 @@ build_stable:
     when: always
     paths:
     - _build/meson-logs/*.txt
+    - _build/meson-logs/*.xml
     - _build/meson-dist/*
     - _build/meson-logs/coveragereport/*
+    - _build/meson-logs/python-coverage-html/*
     reports:
       junit:
         - _build/meson-logs/testlog.junit.xml
       coverage_report:
         coverage_format: cobertura
-        path: _build/meson-logs/coverage.xml
+        path: _build/meson-logs/*coverage.xml
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
 
 address_sanitizer:
@@ -162,7 +173,19 @@ pages:
       artifacts: true
   script:
     - mv _build-docs/docs/html public
-    - mv _build/meson-logs/coveragereport public/coverage
+    - mkdir public/coverage
+    - mv _build/meson-logs/coveragereport public/coverage/daemon
+    - mv _build/meson-logs/python-coverage-html public/coverage/tool
+    - echo '
+        <html>
+          <head><title>Power Profiles Daemon Coverage</title></head>
+          <body>
+            <ul>
+              <li><a href="daemon">Daemon</a></li>
+              <li><a href="tool"><code>powerprofilesctl</code> tool</a></li>
+            </ul>
+          </body>
+        </html>' > public/coverage/index.html
   artifacts:
     paths:
       - public
