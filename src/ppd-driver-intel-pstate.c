@@ -34,6 +34,7 @@ struct _PpdDriverIntelPstate
   GList *epb_devices; /* GList of paths */
   GFileMonitor *no_turbo_mon;
   char *no_turbo_path;
+  gboolean on_battery;
 };
 
 G_DEFINE_TYPE (PpdDriverIntelPstate, ppd_driver_intel_pstate, PPD_TYPE_DRIVER_CPU)
@@ -283,7 +284,7 @@ out:
 }
 
 static const char *
-profile_to_epp_pref (PpdProfile profile)
+profile_to_epp_pref (PpdProfile profile, gboolean battery)
 {
   /* Note that we don't check "energy_performance_available_preferences"
    * as all the values are always available */
@@ -291,7 +292,7 @@ profile_to_epp_pref (PpdProfile profile)
   case PPD_PROFILE_POWER_SAVER:
     return "power";
   case PPD_PROFILE_BALANCED:
-    return "balance_performance";
+    return battery ? "balance_power" : "balance_performance";
   case PPD_PROFILE_PERFORMANCE:
     return "performance";
   }
@@ -300,7 +301,7 @@ profile_to_epp_pref (PpdProfile profile)
 }
 
 static const char *
-profile_to_epb_pref (PpdProfile profile)
+profile_to_epb_pref (PpdProfile profile, gboolean battery)
 {
   /* From arch/x86/include/asm/msr-index.h
    * See ENERGY_PERF_BIAS_* */
@@ -308,7 +309,7 @@ profile_to_epb_pref (PpdProfile profile)
   case PPD_PROFILE_POWER_SAVER:
     return "15";
   case PPD_PROFILE_BALANCED:
-    return "6";
+    return battery ? "8" : "6";
   case PPD_PROFILE_PERFORMANCE:
     return "0";
   }
@@ -317,22 +318,64 @@ profile_to_epb_pref (PpdProfile profile)
 }
 
 static gboolean
-apply_pref_to_devices (GList       *devices,
-                       const char  *pref,
+apply_pref_to_devices (PpdDriver   *driver,
+                       PpdProfile   profile,
                        GError     **error)
 {
-  gboolean ret = TRUE;
+  PpdDriverIntelPstate *pstate = PPD_DRIVER_INTEL_PSTATE (driver);
   GList *l;
 
-  for (l = devices; l != NULL; l = l->next) {
-    const char *path = l->data;
+  g_return_val_if_fail (pstate->epp_devices != NULL ||
+                        pstate->epb_devices, FALSE);
 
-    ret = ppd_utils_write (path, pref, error);
-    if (!ret)
-      break;
+  if (profile == PPD_PROFILE_UNSET)
+    return TRUE;
+
+  if (pstate->epp_devices) {
+    for (l = pstate->epp_devices; l != NULL; l = l->next) {
+      const char *path = l->data;
+
+      if (!ppd_utils_write (path, profile_to_epp_pref (profile, pstate->on_battery), error))
+        return FALSE;
+    }
   }
 
-  return ret;
+  if (pstate->epb_devices) {
+    for (l = pstate->epb_devices; l != NULL; l = l->next) {
+      const char *path = l->data;
+
+      if (!ppd_utils_write (path, profile_to_epb_pref (profile, pstate->on_battery), error))
+        return FALSE;
+    }
+  }
+
+  pstate->activated_profile = profile;
+
+  return TRUE;
+}
+
+static gboolean
+ppd_driver_intel_pstate_power_changed (PpdDriver             *driver,
+                                     PpdPowerChangedReason  reason,
+                                     GError               **error)
+{
+  PpdDriverIntelPstate *pstate = PPD_DRIVER_INTEL_PSTATE (driver);
+
+  switch (reason) {
+  case PPD_POWER_CHANGED_REASON_UNKNOWN:
+  case PPD_POWER_CHANGED_REASON_AC:
+    pstate->on_battery = FALSE;
+    break;
+  case PPD_POWER_CHANGED_REASON_BATTERY:
+    pstate->on_battery = TRUE;
+    break;
+  default:
+    g_return_val_if_reached (FALSE);
+  }
+
+  return apply_pref_to_devices (driver,
+                                pstate->activated_profile,
+                                error);
 }
 
 static gboolean
@@ -341,28 +384,7 @@ ppd_driver_intel_pstate_activate_profile (PpdDriver                    *driver,
                                           PpdProfileActivationReason   reason,
                                           GError                     **error)
 {
-  PpdDriverIntelPstate *pstate = PPD_DRIVER_INTEL_PSTATE (driver);
-  gboolean ret = FALSE;
-  const char *pref;
-
-  g_return_val_if_fail (pstate->epp_devices != NULL ||
-                        pstate->epb_devices, FALSE);
-
-  if (pstate->epp_devices) {
-    pref = profile_to_epp_pref (profile);
-    ret = apply_pref_to_devices (pstate->epp_devices, pref, error);
-    if (!ret)
-      return ret;
-  }
-  if (pstate->epb_devices) {
-    pref = profile_to_epb_pref (profile);
-    ret = apply_pref_to_devices (pstate->epb_devices, pref, error);
-  }
-
-  if (ret)
-    pstate->activated_profile = profile;
-
-  return ret;
+  return apply_pref_to_devices (driver, profile, error);
 }
 
 static void
@@ -393,6 +415,7 @@ ppd_driver_intel_pstate_class_init (PpdDriverIntelPstateClass *klass)
   driver_class->probe = ppd_driver_intel_pstate_probe;
   driver_class->activate_profile = ppd_driver_intel_pstate_activate_profile;
   driver_class->prepare_to_sleep = ppd_driver_intel_pstate_prepare_for_sleep;
+  driver_class->power_changed = ppd_driver_intel_pstate_power_changed;
 }
 
 static void
