@@ -90,7 +90,10 @@ no_turbo_changed (GFileMonitor     *monitor,
   g_autofree char *path = NULL;
 
   path = g_file_get_path (file);
-  g_debug ("File monitor change happened for '%s'", path);
+  g_debug ("File monitor change happened for '%s' (event type %d)", path, event_type);
+
+  g_return_if_fail (event_type != G_FILE_MONITOR_EVENT_DELETED);
+
   update_no_turbo (pstate);
 }
 

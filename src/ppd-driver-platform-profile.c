@@ -195,7 +195,8 @@ lapmode_changed (GFileMonitor      *monitor,
                  gpointer           user_data)
 {
   PpdDriverPlatformProfile *self = user_data;
-  g_debug (LAPMODE_SYSFS_NAME " attribute changed");
+  g_debug (LAPMODE_SYSFS_NAME " attribute changed (event: %d)", event_type);
+  g_return_if_fail (event_type != G_FILE_MONITOR_EVENT_DELETED);
   update_dytc_lapmode_state (self);
 }
 
@@ -207,11 +208,15 @@ acpi_platform_profile_changed (GFileMonitor      *monitor,
                                gpointer           user_data)
 {
   PpdDriverPlatformProfile *self = user_data;
+
   g_debug (ACPI_PLATFORM_PROFILE_PATH " changed (%d)", event_type);
   if (self->probe_result == PPD_PROBE_RESULT_DEFER) {
     g_signal_emit_by_name (G_OBJECT (self), "probe-request", 0);
     return;
   }
+
+  g_return_if_fail (event_type != G_FILE_MONITOR_EVENT_DELETED);
+
   update_acpi_platform_profile_state (self);
 }
 
