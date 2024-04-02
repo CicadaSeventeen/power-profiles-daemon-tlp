@@ -1128,6 +1128,8 @@ stop_profile_drivers (PpdApp *data)
   release_all_profile_holds (data);
   g_ptr_array_set_size (data->probed_drivers, 0);
   g_ptr_array_set_size (data->actions, 0);
+  g_clear_handle_id (&data->watcher_id, g_bus_unwatch_name);
+  g_clear_object (&data->upower_proxy);
   g_clear_object (&data->cpu_driver);
   g_clear_object (&data->platform_driver);
 }
