@@ -1341,10 +1341,9 @@ class Tests(dbusmock.DBusTestCase):
 
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 
-        self.spawn_server_template(
+        self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
-            stdout=subprocess.PIPE,
         )
 
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
@@ -1371,10 +1370,9 @@ class Tests(dbusmock.DBusTestCase):
 
         # start upower and try again
         self.stop_daemon()
-        self.spawn_server_template(
+        self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": True},
-            stdout=subprocess.PIPE,
         )
         self.start_daemon()
 
