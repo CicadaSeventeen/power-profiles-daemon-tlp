@@ -32,7 +32,8 @@ struct _PpdDriverIntelPstate
   PpdProfile activated_profile;
   GList *epp_devices; /* GList of paths */
   GList *epb_devices; /* GList of paths */
-  GDBusProxy *logind_proxy;
+  GDBusConnection *system_bus;
+  guint sleep_signal_id;
   GCancellable *cancellable;
   GFileMonitor *no_turbo_mon;
   char *no_turbo_path;
@@ -132,18 +133,18 @@ sys_has_turbo (void)
 }
 
 static void
-logind_proxy_signal_cb (GDBusProxy  *proxy,
-                        const char  *sender_name,
-                        const char  *signal_name,
-                        GVariant    *parameters,
-                        gpointer     user_data)
+prepare_for_sleep_cb (GDBusConnection *connection,
+                      const gchar     *sender_name,
+                      const gchar     *object_path,
+                      const gchar     *interface_name,
+                      const gchar     *signal_name,
+                      GVariant        *parameters,
+                      gpointer         user_data)
 {
   PpdDriverIntelPstate *pstate = user_data;
   g_autoptr(GError) error = NULL;
   gboolean start;
 
-  if (g_strcmp0 (signal_name, "PrepareForSleep") != 0)
-    return;
   g_variant_get (parameters, "(b)", &start);
   if (start)
     return;
@@ -159,31 +160,38 @@ logind_proxy_signal_cb (GDBusProxy  *proxy,
 }
 
 static void
-on_logind_proxy_cb (GObject *source_object,
-                    GAsyncResult *res,
-                    gpointer user_data)
+system_bus_gotten_cb (GObject      *object,
+                      GAsyncResult *res,
+                      gpointer      user_data)
 {
   PpdDriverIntelPstate *pstate = user_data;
   g_autoptr(GError) error = NULL;
-  g_autoptr(GDBusProxy) proxy = NULL;
+  GDBusConnection *system_bus;
 
-  proxy = g_dbus_proxy_new_for_bus_finish (res, &error);
+  system_bus = g_bus_get_finish (res, &error);
 
   if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
     return;
 
   g_clear_object (&pstate->cancellable);
 
-  if (!proxy) {
-    g_debug ("Could not create proxy for logind: %s", error->message);
+  if (!system_bus) {
+    g_debug ("Could not create connect to system bus: %s", error->message);
     return;
   }
 
-  pstate->logind_proxy = g_steal_pointer (&proxy);
-
-  g_signal_connect_object (pstate->logind_proxy, "g-signal",
-                           G_CALLBACK (logind_proxy_signal_cb),
-                           pstate, 0);
+  pstate->system_bus = system_bus;
+  pstate->sleep_signal_id =
+    g_dbus_connection_signal_subscribe (system_bus,
+                                        SYSTEMD_DBUS_NAME,
+                                        SYSTEMD_DBUS_INTERFACE,
+                                        "PrepareForSleep",
+                                        SYSTEMD_DBUS_PATH,
+                                        NULL,
+                                        G_DBUS_SIGNAL_FLAGS_NONE,
+                                        prepare_for_sleep_cb,
+                                        pstate,
+                                        NULL);
 }
 
 static PpdProbeResult
@@ -217,16 +225,13 @@ probe_epb (PpdDriverIntelPstate *pstate)
   }
 
   pstate->cancellable = g_cancellable_new ();
-  g_dbus_proxy_new_for_bus (G_BUS_TYPE_SYSTEM,
-                            G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START |
-                            G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES,
-                            NULL,
-                            SYSTEMD_DBUS_NAME,
-                            SYSTEMD_DBUS_PATH,
-                            SYSTEMD_DBUS_INTERFACE,
-                            pstate->cancellable,
-                            on_logind_proxy_cb,
-                            pstate);
+
+  /* TODO: Maybe get the system bus directly from the daemon? */
+  g_bus_get (G_BUS_TYPE_SYSTEM,
+             pstate->cancellable,
+             system_bus_gotten_cb,
+             pstate);
+
   return ret;
 }
 
@@ -415,13 +420,18 @@ ppd_driver_intel_pstate_finalize (GObject *object)
   PpdDriverIntelPstate *driver;
 
   driver = PPD_DRIVER_INTEL_PSTATE (object);
+
+  if (driver->sleep_signal_id) {
+    g_dbus_connection_signal_unsubscribe (driver->system_bus, driver->sleep_signal_id);
+    driver->sleep_signal_id = 0;
+  }
+
   g_clear_list (&driver->epp_devices, g_free);
   g_clear_list (&driver->epb_devices, g_free);
   g_clear_pointer (&driver->no_turbo_path, g_free);
   g_clear_object (&driver->no_turbo_mon);
   g_cancellable_cancel (driver->cancellable);
   g_clear_object (&driver->cancellable);
-  g_clear_object (&driver->logind_proxy);
   G_OBJECT_CLASS (ppd_driver_intel_pstate_parent_class)->finalize (object);
 }
 
