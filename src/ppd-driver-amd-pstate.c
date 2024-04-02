@@ -222,9 +222,9 @@ apply_pref_to_devices (GList       *devices,
 
 static gboolean
 ppd_driver_amd_pstate_activate_profile (PpdDriver                    *driver,
-                                          PpdProfile                   profile,
-                                          PpdProfileActivationReason   reason,
-                                          GError                     **error)
+                                        PpdProfile                   profile,
+                                        PpdProfileActivationReason   reason,
+                                        GError                     **error)
 {
   PpdDriverAmdPstate *pstate = PPD_DRIVER_AMD_PSTATE (driver);
   gboolean ret = FALSE;
@@ -252,9 +252,9 @@ ppd_driver_amd_pstate_activate_profile (PpdDriver                    *driver,
 }
 
 static gboolean
-ppd_driver_amd_pstate_power_changed (PpdDriver             *driver,
-                                     PpdPowerChangedReason  reason,
-                                     GError               **error)
+ppd_driver_amd_pstate_power_changed (PpdDriver              *driver,
+                                     PpdPowerChangedReason   reason,
+                                     GError                **error)
 {
   PpdDriverAmdPstate *pstate = PPD_DRIVER_AMD_PSTATE (driver);
 

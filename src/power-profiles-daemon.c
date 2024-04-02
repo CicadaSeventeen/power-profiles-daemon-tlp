@@ -1457,7 +1457,7 @@ quit_signal_callback (gpointer user_data)
 
 int main (int argc, char **argv)
 {
-  g_autoptr (PpdApp) data = NULL;
+  g_autoptr(PpdApp) data = NULL;
   g_autoptr(GOptionContext) option_context = NULL;
   g_autoptr(GError) error = NULL;
   gboolean verbose = FALSE;

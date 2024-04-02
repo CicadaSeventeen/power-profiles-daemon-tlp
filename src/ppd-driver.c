@@ -238,9 +238,10 @@ ppd_driver_activate_profile (PpdDriver                   *driver,
   return PPD_DRIVER_GET_CLASS (driver)->activate_profile (driver, profile, reason, error);
 }
 
-gboolean ppd_driver_power_changed (PpdDriver             *driver,
-                                   PpdPowerChangedReason  reason,
-                                   GError               **error)
+gboolean
+ppd_driver_power_changed (PpdDriver              *driver,
+                          PpdPowerChangedReason   reason,
+                          GError                **error)
 {
   g_return_val_if_fail (PPD_IS_DRIVER (driver), FALSE);
 
