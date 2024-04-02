@@ -1341,11 +1341,17 @@ class Tests(dbusmock.DBusTestCase):
 
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 
-        self.start_dbus_template(
+        _, upowerd_obj, _ = self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
         )
 
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
+        upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", True)
+        self.assert_file_eventually_contains(energy_prefs, "balance_power")
+
+        upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", False)
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 
     def test_amdgpu_panel_power(self):
