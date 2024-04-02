@@ -70,7 +70,6 @@ typedef struct {
 
   GDBusProxy *upower_proxy;
   guint watcher_id;
-  gboolean on_battery;
 } PpdApp;
 
 typedef struct {
@@ -1001,23 +1000,20 @@ upower_properties_changed (GDBusProxy *proxy,
                            GStrv invalidated_properties,
                            PpdApp *data)
 {
-  g_autoptr (GVariant) battery_val = NULL;
-  PpdPowerChangedReason  reason;
-  guint i;
+  g_autoptr(GVariant) battery_val = NULL;
+  PpdPowerChangedReason reason;
 
   if (proxy != NULL)
     battery_val = g_dbus_proxy_get_cached_property (proxy, "OnBattery");
 
-  data->on_battery = battery_val ? g_variant_get_boolean (battery_val) : FALSE;
-
-  if (!battery_val)
+  if (!battery_val || !g_variant_is_of_type (battery_val, G_VARIANT_TYPE_BOOLEAN))
     reason = PPD_POWER_CHANGED_REASON_UNKNOWN;
-  else if (data->on_battery)
+  else if (g_variant_get_boolean (battery_val))
     reason = PPD_POWER_CHANGED_REASON_BATTERY;
   else
     reason = PPD_POWER_CHANGED_REASON_AC;
 
-  for (i = 0; i < data->actions->len; i++) {
+  for (guint i = 0; i < data->actions->len; i++) {
     g_autoptr (GError) error = NULL;
     PpdAction *action;
     gboolean ret;
