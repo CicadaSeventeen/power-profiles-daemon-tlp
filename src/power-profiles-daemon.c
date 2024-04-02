@@ -1016,12 +1016,10 @@ upower_properties_changed (GDBusProxy *proxy,
   for (guint i = 0; i < data->actions->len; i++) {
     g_autoptr(GError) error = NULL;
     PpdAction *action;
-    gboolean ret;
 
     action = g_ptr_array_index (data->actions, i);
 
-    ret = ppd_action_power_changed (action, reason, &error);
-    if (!ret) {
+    if (!ppd_action_power_changed (action, reason, &error)) {
       g_warning ("failed to update action %s: %s",
                  ppd_action_get_action_name (action),
                  error->message);
@@ -1032,10 +1030,8 @@ upower_properties_changed (GDBusProxy *proxy,
 
   if (PPD_IS_DRIVER_CPU (data->cpu_driver)) {
     g_autoptr(GError) error = NULL;
-    gboolean ret;
 
-    ret = ppd_driver_power_changed (PPD_DRIVER (data->cpu_driver), reason, &error);
-    if (!ret) {
+    if (!ppd_driver_power_changed (PPD_DRIVER (data->cpu_driver), reason, &error)) {
       g_warning ("failed to update driver %s: %s",
                  ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)),
                  error->message);
@@ -1044,10 +1040,8 @@ upower_properties_changed (GDBusProxy *proxy,
 
   if (PPD_IS_DRIVER_PLATFORM (data->platform_driver)) {
     g_autoptr(GError) error = NULL;
-    gboolean ret;
 
-    ret = ppd_driver_power_changed (PPD_DRIVER (data->platform_driver), reason, &error);
-    if (!ret) {
+    if (!ppd_driver_power_changed (PPD_DRIVER (data->platform_driver), reason, &error)) {
       g_warning ("failed to update driver %s: %s",
                  ppd_driver_get_driver_name (PPD_DRIVER (data->platform_driver)),
                  error->message);
