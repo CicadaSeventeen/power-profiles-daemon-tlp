@@ -1381,6 +1381,12 @@ class Tests(dbusmock.DBusTestCase):
         upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", True)
         self.assert_file_eventually_contains(energy_prefs, "balance_power")
 
+        # Ensure that changing some other property doesn't change the state.
+        upowerd_obj.Set("org.freedesktop.UPower", "LidIsClosed", True)
+        self.assert_file_eventually_contains(
+            energy_prefs, "balance_power", keep_checking=800
+        )
+
         upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", False)
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 

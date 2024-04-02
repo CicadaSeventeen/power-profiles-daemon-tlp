@@ -72,6 +72,7 @@ typedef struct {
   GDBusProxy *upower_proxy;
   gulong upower_watch_id;
   gulong upower_properties_id;
+  PpdPowerChangedReason power_changed_reason;
 } PpdApp;
 
 typedef struct {
@@ -98,6 +99,7 @@ static PpdApp *ppd_app = NULL;
 
 static void stop_profile_drivers (PpdApp *data);
 static void start_profile_drivers (PpdApp *data);
+static void upower_battery_set_power_changed_reason (PpdApp *, PpdPowerChangedReason);
 
 /* profile drivers and actions */
 #include "ppd-action-trickle-charge.h"
@@ -997,23 +999,55 @@ bus_acquired_handler (GDBusConnection *connection,
 }
 
 static void
-upower_properties_changed (GDBusProxy *proxy,
-                           GVariant *changed_properties,
-                           GStrv invalidated_properties,
-                           PpdApp *data)
+upower_battery_update_state_from_value (PpdApp   *data,
+                                        GVariant *battery_val)
 {
-  g_autoptr(GVariant) battery_val = NULL;
   PpdPowerChangedReason reason;
 
-  if (proxy != NULL)
-    battery_val = g_dbus_proxy_get_cached_property (proxy, "OnBattery");
-
-  if (!battery_val || !g_variant_is_of_type (battery_val, G_VARIANT_TYPE_BOOLEAN))
+  if (!battery_val)
     reason = PPD_POWER_CHANGED_REASON_UNKNOWN;
   else if (g_variant_get_boolean (battery_val))
     reason = PPD_POWER_CHANGED_REASON_BATTERY;
   else
     reason = PPD_POWER_CHANGED_REASON_AC;
+
+  upower_battery_set_power_changed_reason (data, reason);
+}
+
+static void
+upower_battery_update_state (PpdApp *data)
+{
+  g_autoptr(GVariant) battery_val = NULL;
+
+  battery_val = g_dbus_proxy_get_cached_property (data->upower_proxy, "OnBattery");
+  upower_battery_update_state_from_value (data, battery_val);
+}
+
+static void
+upower_properties_changed (GDBusProxy *proxy,
+                           GVariant *changed_properties,
+                           GStrv invalidated_properties,
+                           PpdApp *data)
+{
+  g_auto(GVariantDict) props_dict = G_VARIANT_DICT_INIT (changed_properties);
+  g_autoptr(GVariant) battery_val = NULL;
+
+  battery_val = g_variant_dict_lookup_value (&props_dict, "OnBattery",
+                                             G_VARIANT_TYPE_BOOLEAN);
+
+  if (battery_val)
+    upower_battery_update_state_from_value (data, battery_val);
+}
+
+static void
+upower_battery_set_power_changed_reason (PpdApp                *data,
+                                         PpdPowerChangedReason  reason)
+{
+  if (data->power_changed_reason == reason)
+    return;
+
+  data->power_changed_reason = reason;
+  g_debug ("Power Changed because of reason %d", reason);
 
   for (guint i = 0; i < data->actions->len; i++) {
     g_autoptr(GError) error = NULL;
@@ -1064,13 +1098,12 @@ upower_name_owner_changed (GObject    *object,
 
   if (name_owner != NULL) {
     g_debug ("%s appeared", UPOWER_DBUS_NAME);
-    upower_properties_changed (data->upower_proxy, NULL, NULL, data);
+    upower_battery_update_state (data);
     return;
   }
 
   g_debug ("%s vanished", UPOWER_DBUS_NAME);
-  /* reset */
-  upower_properties_changed (NULL, NULL, NULL, data);
+  upower_battery_set_power_changed_reason (data, PPD_POWER_CHANGED_REASON_UNKNOWN);
 }
 
 static void
@@ -1105,7 +1138,7 @@ on_upower_proxy_cb (GObject *source_object,
                                             G_CALLBACK (upower_name_owner_changed),
                                             data);
 
-  upower_properties_changed (data->upower_proxy, NULL, NULL, data);
+  upower_battery_update_state (data);
 }
 
 static gboolean
@@ -1140,6 +1173,7 @@ driver_probe_request_cb (PpdDriver *driver,
 static void
 stop_profile_drivers (PpdApp *data)
 {
+  upower_battery_set_power_changed_reason (data, PPD_POWER_CHANGED_REASON_UNKNOWN);
   release_all_profile_holds (data);
   g_cancellable_cancel (data->cancellable);
   g_ptr_array_set_size (data->probed_drivers, 0);
