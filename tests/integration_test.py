@@ -185,7 +185,7 @@ class Tests(dbusmock.DBusTestCase):
 
         # pylint: disable=consider-using-with
         self.daemon = subprocess.Popen(
-            daemon_path, env=env, stdout=self.log, stderr=subprocess.STDOUT
+            daemon_path, env=env, stdout=self.log, stderr=sys.stderr
         )
         self.addCleanup(self.stop_daemon, delete_profile=True)
 
