@@ -1313,8 +1313,9 @@ start_profile_drivers (PpdApp *data)
   }
 
   if (!has_required_drivers (data)) {
+    data->ret = 1;
     g_warning ("Some non-optional profile drivers are missing, programmer error");
-    goto bail;
+    g_main_loop_quit (data->main_loop);
   }
 
   /* Set initial state either from configuration, or using the currently selected profile */
@@ -1337,13 +1338,6 @@ start_profile_drivers (PpdApp *data)
                     data);
 
   data->was_started = TRUE;
-
-  return;
-
-bail:
-  data->ret = 1;
-  g_debug ("Exiting because some non recoverable error occurred during startup");
-  g_main_loop_quit (data->main_loop);
 }
 
 void
