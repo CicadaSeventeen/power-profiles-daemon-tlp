@@ -1393,16 +1393,15 @@ free_app_data (PpdApp *data)
   if (data == NULL)
     return;
 
+  stop_profile_drivers (data);
+
   g_clear_handle_id (&data->name_id, g_bus_unown_name);
   g_clear_handle_id (&data->legacy_name_id, g_bus_unown_name);
 
-  g_clear_signal_handler (&data->upower_watch_id, data->upower_proxy);
-  g_clear_signal_handler (&data->upower_properties_id, data->upower_proxy);
-  g_clear_object (&data->upower_proxy);
   g_clear_pointer (&data->config_path, g_free);
   g_clear_pointer (&data->config, g_key_file_unref);
-  g_ptr_array_free (data->probed_drivers, TRUE);
-  g_ptr_array_free (data->actions, TRUE);
+  g_clear_pointer (&data->probed_drivers, g_ptr_array_unref);
+  g_clear_pointer (&data->actions, g_ptr_array_unref);
   g_clear_object (&data->cpu_driver);
   g_clear_object (&data->platform_driver);
   g_hash_table_destroy (data->profile_holds);
