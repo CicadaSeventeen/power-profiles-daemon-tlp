@@ -49,6 +49,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (PolkitSubject, g_object_unref)
 typedef struct {
   GMainLoop *main_loop;
   GDBusConnection *connection;
+  GCancellable *cancellable;
   guint name_id;
   guint legacy_name_id;
   gboolean was_started;
@@ -69,7 +70,8 @@ typedef struct {
   GLogLevelFlags log_level;
 
   GDBusProxy *upower_proxy;
-  guint watcher_id;
+  gulong upower_watch_id;
+  gulong upower_properties_id;
 } PpdApp;
 
 typedef struct {
@@ -1050,46 +1052,59 @@ upower_properties_changed (GDBusProxy *proxy,
 }
 
 static void
-upower_name_vanished (GDBusConnection *connection,
-                      const gchar     *name,
-                      gpointer         user_data)
+upower_name_owner_changed (GObject    *object,
+                           GParamSpec *pspec,
+                           gpointer    user_data)
 {
   PpdApp *data = user_data;
+  GDBusProxy *upower_proxy = G_DBUS_PROXY (object);
+  g_autofree char *name_owner = NULL;
+
+  name_owner = g_dbus_proxy_get_name_owner (upower_proxy);
+
+  if (name_owner != NULL) {
+    g_debug ("%s appeared", UPOWER_DBUS_NAME);
+    upower_properties_changed (data->upower_proxy, NULL, NULL, data);
+    return;
+  }
 
   g_debug ("%s vanished", UPOWER_DBUS_NAME);
-
   /* reset */
-  g_clear_pointer (&data->upower_proxy, g_object_unref);
   upower_properties_changed (NULL, NULL, NULL, data);
 }
 
 static void
-upower_name_appeared (GDBusConnection *connection,
-                      const gchar     *name,
-                      const gchar     *name_owner,
-                      gpointer         user_data)
+on_upower_proxy_cb (GObject *source_object,
+                    GAsyncResult *res,
+                    gpointer user_data)
 {
   PpdApp *data = user_data;
-  g_autoptr (GError) error = NULL;
+  g_autoptr(GDBusProxy) upower_proxy = NULL;
+  g_autoptr(GError) error = NULL;
 
-  g_debug ("%s appeared", UPOWER_DBUS_NAME);
-  data->upower_proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
-                                                      G_DBUS_PROXY_FLAGS_NONE,
-                                                      NULL,
-                                                      UPOWER_DBUS_NAME,
-                                                      UPOWER_DBUS_PATH,
-                                                      UPOWER_DBUS_INTERFACE,
-                                                      NULL,
-                                                      &error);
-  if (data->upower_proxy == NULL) {
-    g_debug ("failed to connect to upower: %s", error->message);
+  upower_proxy = g_dbus_proxy_new_finish (res, &error);
+
+  if (upower_proxy == NULL) {
+    if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+      return;
+
+    g_warning ("failed to connect to upower: %s", error->message);
     return;
   }
 
-  g_signal_connect (data->upower_proxy,
-                    "g-properties-changed",
-                    G_CALLBACK(upower_properties_changed),
-                    data);
+  g_return_if_fail (data->upower_proxy == NULL);
+  data->upower_proxy = g_steal_pointer (&upower_proxy);
+
+  data->upower_properties_id = g_signal_connect (data->upower_proxy,
+                                                 "g-properties-changed",
+                                                 G_CALLBACK (upower_properties_changed),
+                                                 data);
+
+  data->upower_watch_id = g_signal_connect (data->upower_proxy,
+                                            "notify::g-name-owner",
+                                            G_CALLBACK (upower_name_owner_changed),
+                                            data);
+
   upower_properties_changed (data->upower_proxy, NULL, NULL, data);
 }
 
@@ -1126,9 +1141,12 @@ static void
 stop_profile_drivers (PpdApp *data)
 {
   release_all_profile_holds (data);
+  g_cancellable_cancel (data->cancellable);
   g_ptr_array_set_size (data->probed_drivers, 0);
   g_ptr_array_set_size (data->actions, 0);
-  g_clear_handle_id (&data->watcher_id, g_bus_unwatch_name);
+  g_clear_signal_handler (&data->upower_watch_id, data->upower_proxy);
+  g_clear_signal_handler (&data->upower_properties_id, data->upower_proxy);
+  g_clear_object (&data->cancellable);
   g_clear_object (&data->upower_proxy);
   g_clear_object (&data->cpu_driver);
   g_clear_object (&data->platform_driver);
@@ -1168,6 +1186,8 @@ start_profile_drivers (PpdApp *data)
 {
   guint i;
   g_autoptr(GError) initial_error = NULL;
+
+  data->cancellable = g_cancellable_new ();
 
   for (i = 0; i < G_N_ELEMENTS (objects); i++) {
     g_autoptr(GObject) object = NULL;
@@ -1268,16 +1288,19 @@ start_profile_drivers (PpdApp *data)
   if (!activate_target_profile (data, data->active_profile, PPD_PROFILE_ACTIVATION_REASON_RESET, &initial_error))
     g_warning ("Failed to activate initial profile: %s", initial_error->message);
 
-  /* start watching for power changes */
-  data->watcher_id = g_bus_watch_name (G_BUS_TYPE_SYSTEM,
-                                       UPOWER_DBUS_NAME,
-                                       G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                       upower_name_appeared,
-                                       upower_name_vanished,
-                                       data,
-                                       NULL);
-
   send_dbus_event (data, PROP_ALL);
+
+  /* start watching for power changes */
+  g_dbus_proxy_new (data->connection,
+                    G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START |
+                    G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
+                    NULL,
+                    UPOWER_DBUS_NAME,
+                    UPOWER_DBUS_PATH,
+                    UPOWER_DBUS_INTERFACE,
+                    data->cancellable,
+                    on_upower_proxy_cb,
+                    data);
 
   data->was_started = TRUE;
 
@@ -1373,8 +1396,9 @@ free_app_data (PpdApp *data)
   g_clear_handle_id (&data->name_id, g_bus_unown_name);
   g_clear_handle_id (&data->legacy_name_id, g_bus_unown_name);
 
-  g_clear_handle_id (&data->watcher_id, g_bus_unwatch_name);
-  g_clear_pointer (&data->upower_proxy, g_object_unref);
+  g_clear_signal_handler (&data->upower_watch_id, data->upower_proxy);
+  g_clear_signal_handler (&data->upower_properties_id, data->upower_proxy);
+  g_clear_object (&data->upower_proxy);
   g_clear_pointer (&data->config_path, g_free);
   g_clear_pointer (&data->config, g_key_file_unref);
   g_ptr_array_free (data->probed_drivers, TRUE);
