@@ -550,7 +550,10 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         # Degraded DYTC
-        self.testbed.set_attribute(self.tp_acpi, "dytc_lapmode", "1\n")
+        lapmode = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/thinkpad_acpi/dytc_lapmode"
+        )
+        self.write_file_contents(lapmode, "1\n")
         self.assert_eventually(lambda: self.have_text_in_log("dytc_lapmode is now on"))
         self.assertEqual(
             self.get_dbus_property("PerformanceDegraded"),
@@ -572,7 +575,10 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "performance")
 
         # Degraded
-        self.testbed.set_attribute(self.tp_acpi, "dytc_lapmode", "1\n")
+        lapmode = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/thinkpad_acpi/dytc_lapmode"
+        )
+        self.write_file_contents(lapmode, "1\n")
         self.assert_eventually(lambda: self.have_text_in_log("dytc_lapmode is now on"))
         self.assertEqual(self.get_dbus_property("PerformanceDegraded"), "lap-detected")
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "performance")
@@ -1236,12 +1242,15 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "performance")
 
         # lapmode detected
-        self.testbed.set_attribute(self.tp_acpi, "dytc_lapmode", "1\n")
+        lapmode = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/thinkpad_acpi/dytc_lapmode"
+        )
+        self.write_file_contents(lapmode, "1\n")
         self.assert_dbus_property_eventually_is("PerformanceDegraded", "lap-detected")
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "performance")
 
         # Reset lapmode
-        self.testbed.set_attribute(self.tp_acpi, "dytc_lapmode", "0\n")
+        self.write_file_contents(lapmode, "0\n")
         self.assert_dbus_property_eventually_is("PerformanceDegraded", "")
 
         # Performance mode didn't change
