@@ -141,7 +141,6 @@ logind_proxy_signal_cb (GDBusProxy  *proxy,
   PpdDriverIntelPstate *pstate = user_data;
   g_autoptr(GError) error = NULL;
   gboolean start;
-  PpdProbeResult ret;
 
   if (g_strcmp0 (signal_name, "PrepareForSleep") != 0)
     return;
@@ -150,11 +149,10 @@ logind_proxy_signal_cb (GDBusProxy  *proxy,
     return;
 
   g_debug ("System woke up from suspend, re-applying energy_perf_bias");
-  ret = ppd_driver_intel_pstate_activate_profile (PPD_DRIVER (pstate),
-                                                  pstate->activated_profile,
-                                                  PPD_PROFILE_ACTIVATION_REASON_RESUME,
-                                                  &error);
-  if (ret != PPD_PROBE_RESULT_SUCCESS) {
+  if (!ppd_driver_intel_pstate_activate_profile (PPD_DRIVER (pstate),
+                                                 pstate->activated_profile,
+                                                 PPD_PROFILE_ACTIVATION_REASON_RESUME,
+                                                 &error)) {
     g_warning ("Could not reapply energy_perf_bias preference on resume: %s",
                error->message);
   }
