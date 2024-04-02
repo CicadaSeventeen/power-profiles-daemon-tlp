@@ -14,7 +14,7 @@
 #include <termios.h>
 
 extern void main_loop_quit (void);
-void restart_profile_drivers (void);
+void restart_profile_drivers_for_default_app (void);
 
 struct _PpdDriverFake
 {
@@ -88,7 +88,7 @@ check_keyboard (GIOChannel    *source,
     break;
   case 'r':
     g_print ("Restarting profile drivers\n");
-    restart_profile_drivers ();
+    restart_profile_drivers_for_default_app ();
     break;
   case 'q':
   case 'x':

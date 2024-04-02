@@ -1107,13 +1107,19 @@ has_required_drivers (PpdApp *data)
 }
 
 static void
+restart_profile_drivers (PpdApp *data)
+{
+  stop_profile_drivers (data);
+  start_profile_drivers (data);
+}
+
+static void
 driver_probe_request_cb (PpdDriver *driver,
                          gpointer   user_data)
 {
   PpdApp *data = user_data;
 
-  stop_profile_drivers (data);
-  start_profile_drivers (data);
+  restart_profile_drivers (data);
 }
 
 static void
@@ -1282,10 +1288,9 @@ bail:
 }
 
 void
-restart_profile_drivers (void)
+restart_profile_drivers_for_default_app (void)
 {
-  stop_profile_drivers (ppd_app);
-  start_profile_drivers (ppd_app);
+  restart_profile_drivers (ppd_app);
 }
 
 
