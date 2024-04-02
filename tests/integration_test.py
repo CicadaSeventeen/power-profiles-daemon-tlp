@@ -214,7 +214,7 @@ class Tests(dbusmock.DBusTestCase):
         self.assert_eventually(
             lambda: self.proxy and self.proxy.get_name_owner(),
             timeout=wait_time * 1000,
-            message=f"daemon did not start in {wait_time} seconds",
+            message=lambda: f"daemon did not start in {wait_time} seconds",
         )
 
         def properties_changed_cb(_, changed_properties, invalidated):
@@ -393,7 +393,7 @@ class Tests(dbusmock.DBusTestCase):
         Timeout is in milliseconds, defaulting to 5000 (5 seconds). message is
         printed on failure.
         """
-        if not keep_checking and condition():
+        if keep_checking > 0 and condition():
             return
 
         done = False
@@ -406,14 +406,14 @@ class Tests(dbusmock.DBusTestCase):
         while not done:
             if condition():
                 GLib.source_remove(source)
-                if keep_checking:
+                if keep_checking > 0:
                     self.assert_condition_persists(
                         condition, message, timeout=keep_checking
                     )
                 return
             GLib.MainContext.default().iteration(False)
 
-        self.fail(message or f"timed out waiting for {condition}")
+        self.fail(message() if message else f"timed out waiting for {condition}")
 
     def assert_condition_persists(self, condition, message=None, timeout=1000):
         done = False
@@ -426,7 +426,9 @@ class Tests(dbusmock.DBusTestCase):
         while not done:
             if not condition():
                 GLib.source_remove(source)
-                self.fail(message or f"Condition is not persisting {condition}")
+                self.fail(
+                    message() if message else f"Condition is not persisting {condition}"
+                )
             GLib.MainContext.default().iteration(False)
 
     def assert_file_eventually_contains(
@@ -438,10 +440,11 @@ class Tests(dbusmock.DBusTestCase):
             lambda: self.read_file_contents(path) == encoded,
             timeout=timeout,
             keep_checking=keep_checking,
-            message=f"file '{path}' does not contain '{contents}', "
+            message=lambda: f"file '{path}' does not contain '{contents}', "
             + f"but '{self.read_file_contents(path)}'",
         )
 
+    # pylint: disable=too-many-arguments
     def assert_sysfs_attr_eventually_is(
         self, device, attribute, contents, timeout=800, keep_checking=0
     ):
@@ -451,7 +454,7 @@ class Tests(dbusmock.DBusTestCase):
             lambda: self.read_sysfs_attr(device, attribute) == encoded,
             timeout=timeout,
             keep_checking=keep_checking,
-            message=f"file {device} '{attribute}' does not contain '{contents}', "
+            message=lambda: f"file {device} '{attribute}' does not contain '{contents}', "
             + f"but '{self.read_sysfs_attr(device, attribute)}'",
         )
 
@@ -463,7 +466,7 @@ class Tests(dbusmock.DBusTestCase):
             lambda: self.get_dbus_property(prop) == value,
             timeout=timeout,
             keep_checking=keep_checking,
-            message=f"property '{prop}' is not '{value}', but "
+            message=lambda: f"property '{prop}' is not '{value}', but "
             + f"'{self.get_dbus_property(prop)}'",
         )
 
