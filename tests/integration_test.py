@@ -387,13 +387,13 @@ class Tests(dbusmock.DBusTestCase):
     def powerprofilesctl_command(self):
         return self.python_coverage_commands() + [self.powerprofilesctl_path()]
 
-    def assert_eventually(self, condition, message=None, timeout=5000):
+    def assert_eventually(self, condition, message=None, timeout=5000, keep_checking=0):
         """Assert that condition function eventually returns True.
 
         Timeout is in milliseconds, defaulting to 5000 (5 seconds). message is
         printed on failure.
         """
-        if condition():
+        if not keep_checking and condition():
             return
 
         done = False
@@ -406,36 +406,63 @@ class Tests(dbusmock.DBusTestCase):
         while not done:
             if condition():
                 GLib.source_remove(source)
+                if keep_checking:
+                    self.assert_condition_persists(
+                        condition, message, timeout=keep_checking
+                    )
                 return
             GLib.MainContext.default().iteration(False)
 
-        self.fail(message or "timed out waiting for " + str(condition))
+        self.fail(message or f"timed out waiting for {condition}")
 
-    def assert_file_eventually_contains(self, path, contents, timeout=800):
+    def assert_condition_persists(self, condition, message=None, timeout=1000):
+        done = False
+
+        def on_timeout_reached():
+            nonlocal done
+            done = True
+
+        source = GLib.timeout_add(timeout, on_timeout_reached)
+        while not done:
+            if not condition():
+                GLib.source_remove(source)
+                self.fail(message or f"Condition is not persisting {condition}")
+            GLib.MainContext.default().iteration(False)
+
+    def assert_file_eventually_contains(
+        self, path, contents, timeout=800, keep_checking=0
+    ):
         """Asserts that file contents eventually matches expectations"""
         encoded = contents.encode("utf-8")
         return self.assert_eventually(
             lambda: self.read_file_contents(path) == encoded,
             timeout=timeout,
+            keep_checking=keep_checking,
             message=f"file '{path}' does not contain '{contents}', "
             + f"but '{self.read_file_contents(path)}'",
         )
 
-    def assert_sysfs_attr_eventually_is(self, device, attribute, contents, timeout=800):
+    def assert_sysfs_attr_eventually_is(
+        self, device, attribute, contents, timeout=800, keep_checking=0
+    ):
         """Asserts that file contents eventually matches expectations"""
         encoded = contents.encode("utf-8")
         return self.assert_eventually(
             lambda: self.read_sysfs_attr(device, attribute) == encoded,
             timeout=timeout,
+            keep_checking=keep_checking,
             message=f"file {device} '{attribute}' does not contain '{contents}', "
             + f"but '{self.read_sysfs_attr(device, attribute)}'",
         )
 
-    def assert_dbus_property_eventually_is(self, prop, value, timeout=1200):
+    def assert_dbus_property_eventually_is(
+        self, prop, value, timeout=1200, keep_checking=0
+    ):
         """Asserts that a dbus property eventually is what expected"""
         return self.assert_eventually(
             lambda: self.get_dbus_property(prop) == value,
             timeout=timeout,
+            keep_checking=keep_checking,
             message=f"property '{prop}' is not '{value}', but "
             + f"'{self.get_dbus_property(prop)}'",
         )
