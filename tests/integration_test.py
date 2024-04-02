@@ -103,22 +103,36 @@ class Tests(dbusmock.DBusTestCase):
         cls.start_system_bus()
         cls.dbus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
 
+    def start_dbus_template(self, template, parameters):
+        process, dbus_object = self.spawn_server_template(
+            template, parameters, stdout=subprocess.PIPE
+        )
+
+        def stop_template():
+            process.stdout.close()
+            try:
+                process.kill()
+            except OSError:
+                pass
+            process.wait()
+
+        self.addCleanup(stop_template)
+        self.assertTrue(process)
+        self.assertTrue(dbus_object)
+
+        return process, dbus_object, stop_template
+
     def setUp(self):
         """Set up a local umockdev testbed.
 
         The testbed is initially empty.
         """
         self.testbed = UMockdev.Testbed.new()
-        self.polkitd, self.obj_polkit = self.spawn_server_template(
-            "polkitd", {}, stdout=subprocess.PIPE
-        )
-        self.obj_polkit.SetAllowed(
-            [
-                "org.freedesktop.UPower.PowerProfiles.switch-profile",
-                "org.freedesktop.UPower.PowerProfiles.hold-profile",
-            ]
-        )
 
+        def del_testbed():
+            del self.testbed
+
+        self.addCleanup(del_testbed)
         self.proxy = None
         self.props_proxy = None
         self.log = None
@@ -127,6 +141,14 @@ class Tests(dbusmock.DBusTestCase):
 
         # Used for dytc devices
         self.tp_acpi = None
+
+        self.polkitd, self.obj_polkit, _ = self.start_dbus_template("polkitd", {})
+        self.obj_polkit.SetAllowed(
+            [
+                "org.freedesktop.UPower.PowerProfiles.switch-profile",
+                "org.freedesktop.UPower.PowerProfiles.hold-profile",
+            ]
+        )
 
     def run(self, result=None):
         super().run(result)
@@ -137,28 +159,6 @@ class Tests(dbusmock.DBusTestCase):
                 sys.stderr.write("\n-------------- daemon log: ----------------\n")
                 sys.stderr.write(tmpf.read())
                 sys.stderr.write("------------------------------\n")
-
-    def tearDown(self):
-        self.stop_daemon()
-
-        if self.polkitd:
-            self.polkitd.stdout.close()
-            try:
-                self.polkitd.kill()
-            except OSError:
-                pass
-            self.polkitd.wait()
-
-        self.obj_polkit = None
-
-        del self.tp_acpi
-
-        try:
-            os.remove(self.testbed.get_root_dir() + "/" + "ppd_test_conf.ini")
-        except (AttributeError, FileNotFoundError):
-            pass
-        finally:
-            del self.testbed
 
     #
     # Daemon control and D-BUS I/O
@@ -187,7 +187,7 @@ class Tests(dbusmock.DBusTestCase):
         self.daemon = subprocess.Popen(
             daemon_path, env=env, stdout=self.log, stderr=subprocess.STDOUT
         )
-        self.addCleanup(self.daemon.kill)
+        self.addCleanup(self.stop_daemon, delete_profile=True)
 
         def on_proxy_connected(_, res):
             try:
@@ -241,7 +241,7 @@ class Tests(dbusmock.DBusTestCase):
             None,
         )
 
-    def stop_daemon(self):
+    def stop_daemon(self, delete_profile=False):
         """Stop the daemon if it is running."""
 
         if self.daemon:
@@ -250,6 +250,12 @@ class Tests(dbusmock.DBusTestCase):
             except OSError:
                 pass
             self.assertEqual(self.daemon.wait(timeout=3000), 0)
+
+        if delete_profile:
+            try:
+                os.remove(self.testbed.get_root_dir() + "/" + "ppd_test_conf.ini")
+            except (AttributeError, FileNotFoundError):
+                pass
 
         self.daemon = None
         self.proxy = None
@@ -306,6 +312,7 @@ class Tests(dbusmock.DBusTestCase):
         attr = "-"
         if enable:
             os.chmod(fname, 0o444)
+            self.addCleanup(self.change_immutable, fname, False)
             attr = "+"
         if os.geteuid() == 0:
             if not GLib.find_program_in_path("chattr"):
@@ -323,6 +330,7 @@ class Tests(dbusmock.DBusTestCase):
             ["dytc_lapmode", "0\n"],
             ["DEVPATH", "/devices/platform/thinkpad_acpi"],
         )
+        self.addCleanup(self.testbed.remove_device, self.tp_acpi)
 
     def create_amd_apu(self):
         proc_dir = os.path.join(self.testbed.get_root_dir(), "proc/")
@@ -661,10 +669,9 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
 
-        upowerd, obj_upower = self.spawn_server_template(
+        upowerd, obj_upower, _ = self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
-            stdout=subprocess.PIPE,
         )
         self.assertNotEqual(upowerd, None)
         self.assertNotEqual(obj_upower, None)
@@ -682,12 +689,6 @@ class Tests(dbusmock.DBusTestCase):
         self.assert_file_eventually_contains(
             os.path.join(dir1, "energy_performance_preference"), "balance_performance"
         )
-
-        self.stop_daemon()
-
-        upowerd.terminate()
-        upowerd.wait()
-        upowerd.stdout.close()
 
     def test_intel_pstate_error(self):
         """Intel P-State driver in error state"""
@@ -723,10 +724,6 @@ class Tests(dbusmock.DBusTestCase):
 
         energy_prefs = os.path.join(dir1, "energy_performance_preference")
         self.assert_file_eventually_contains(energy_prefs, "balance_performance\n")
-
-        self.stop_daemon()
-
-        self.change_immutable(pref_path, False)
 
     def test_intel_pstate_passive(self):
         """Intel P-State in passive mode -> placeholder"""
@@ -765,8 +762,6 @@ class Tests(dbusmock.DBusTestCase):
 
         energy_prefs = os.path.join(dir1, "energy_performance_preference")
         self.assert_file_eventually_contains(energy_prefs, "performance\n")
-
-        self.stop_daemon()
 
     def test_intel_pstate_passive_with_epb(self):
         """Intel P-State in passive mode (no HWP) with energy_perf_bias"""
@@ -815,8 +810,6 @@ class Tests(dbusmock.DBusTestCase):
 
         self.assert_file_eventually_contains(energy_perf_bias, "0")
 
-        self.stop_daemon()
-
     def test_action_blocklist(self):
         """Test action blocklist works"""
         self.testbed.add_device(
@@ -829,10 +822,9 @@ class Tests(dbusmock.DBusTestCase):
 
         self.create_amd_apu()
 
-        self.spawn_server_template(
+        self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
-            stdout=subprocess.PIPE,
         )
 
         # Block panel_power action
@@ -999,9 +991,6 @@ class Tests(dbusmock.DBusTestCase):
             ),
             b"balance_performance",
         )
-        self.change_immutable(profile, False)
-
-        self.stop_daemon()
 
     # pylint: disable=too-many-statements
     def test_amd_pstate(self):
@@ -1066,8 +1055,6 @@ class Tests(dbusmock.DBusTestCase):
         self.assert_file_eventually_contains(energy_prefs, "power")
         self.assert_file_eventually_contains(scaling_governor, "powersave")
 
-        self.stop_daemon()
-
     def test_amd_pstate_balance(self):
         """AMD P-State driver (balance)"""
 
@@ -1092,13 +1079,10 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(dir2)
         self.write_file_contents(os.path.join(dir2, "pm_profile"), "1\n")
 
-        upowerd, obj_upower = self.spawn_server_template(
+        self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
-            stdout=subprocess.PIPE,
         )
-        self.assertTrue(upowerd)
-        self.assertTrue(obj_upower)
 
         self.start_daemon()
 
@@ -1114,12 +1098,6 @@ class Tests(dbusmock.DBusTestCase):
 
         scaling_governor = os.path.join(dir1, "scaling_governor")
         self.assert_file_eventually_contains(scaling_governor, "powersave")
-
-        self.stop_daemon()
-
-        upowerd.terminate()
-        upowerd.wait()
-        upowerd.stdout.close()
 
     def test_amd_pstate_error(self):
         """AMD P-State driver in error state"""
@@ -1160,10 +1138,6 @@ class Tests(dbusmock.DBusTestCase):
 
         energy_prefs = os.path.join(dir1, "energy_performance_preference")
         self.assert_file_eventually_contains(energy_prefs, "balance_performance\n")
-
-        self.stop_daemon()
-
-        self.change_immutable(pref_path, False)
 
     def test_amd_pstate_passive(self):
         """AMD P-State in passive mode -> placeholder"""
@@ -1206,8 +1180,6 @@ class Tests(dbusmock.DBusTestCase):
 
         self.assert_file_eventually_contains(energy_prefs, "performance\n")
 
-        self.stop_daemon()
-
     def test_amd_pstate_server(self):
         # Create 2 CPUs with preferences
         dir1 = os.path.join(
@@ -1245,8 +1217,6 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(len(profiles), 2)
         with self.assertRaises(KeyError):
             print(profiles[0]["CpuDriver"])
-
-        self.stop_daemon()
 
     def test_dytc_performance_driver(self):
         """Lenovo DYTC performance driver"""
@@ -1338,13 +1308,9 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(dir3)
         self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
 
-        (
-            upowerd,
-            garbage,  # pylint: disable=unused-variable
-        ) = self.spawn_server_template(
+        _, _, stop_upowerd = self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": True},
-            stdout=subprocess.PIPE,
         )
 
         self.start_daemon()
@@ -1362,13 +1328,11 @@ class Tests(dbusmock.DBusTestCase):
         self.assert_file_eventually_contains(energy_prefs, "balance_power")
         self.assert_file_eventually_contains(scaling_governor, "powersave")
 
-        upowerd.terminate()
-        upowerd.wait()
-        upowerd.stdout.close()
+        stop_upowerd()
 
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 
-        upowerd, garbage = self.spawn_server_template(
+        self.spawn_server_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
             stdout=subprocess.PIPE,
@@ -1537,8 +1501,6 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "balanced")
         self.assertEqual(self.get_dbus_property("PerformanceDegraded"), "")
 
-        self.stop_daemon()
-
     def test_hp_wmi(self):
         # Uses cool instead of low-power
         acpi_dir = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
@@ -1571,8 +1533,6 @@ class Tests(dbusmock.DBusTestCase):
             self.read_sysfs_file("sys/firmware/acpi/platform_profile"), b"balanced"
         )
 
-        self.stop_daemon()
-
     def test_quiet(self):
         # Uses quiet instead of low-power
         acpi_dir = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
@@ -1598,8 +1558,6 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(
             self.read_sysfs_file("sys/firmware/acpi/platform_profile"), b"quiet"
         )
-
-        self.stop_daemon()
 
     def test_hold_release_profile(self):
         self.create_platform_profile()
@@ -1705,8 +1663,6 @@ class Tests(dbusmock.DBusTestCase):
             lambda: self.changed_properties.get("ActiveProfile") == "power-saver"
         )
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "power-saver")
-
-        self.stop_daemon()
 
     def test_launch_arguments_redirection(self):
         self.create_platform_profile()
@@ -1817,8 +1773,6 @@ class Tests(dbusmock.DBusTestCase):
         holds = self.get_dbus_property("ActiveProfileHolds")
         self.assertEqual(len(holds), 0)
 
-        self.stop_daemon()
-
     def test_launch_sigint_wrapper(self):
         self.create_platform_profile()
         self.start_daemon()
@@ -1911,8 +1865,6 @@ class Tests(dbusmock.DBusTestCase):
         self.call_dbus_method("ReleaseProfile", GLib.Variant("(u)", powersaver_cookie))
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "balanced")
 
-        self.stop_daemon()
-
     def test_save_profile(self):
         """save profile across runs"""
 
@@ -1940,7 +1892,6 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "power-saver")
-        self.stop_daemon()
 
     def test_save_deferred_load(self):
         """save profile across runs, but kernel driver loaded after start"""
@@ -1968,7 +1919,6 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         self.assert_dbus_property_eventually_is("ActiveProfile", "power-saver")
-        self.stop_daemon()
 
     def test_not_allowed_profile(self):
         """Check that we get errors when trying to change a profile and not allowed"""
@@ -1995,8 +1945,6 @@ class Tests(dbusmock.DBusTestCase):
             )
         self.assertIn("AccessDenied", str(error.exception))
 
-        self.stop_daemon()
-
     def test_not_allowed_hold(self):
         """Check that we get an error when trying to hold a profile and not allowed"""
 
@@ -2012,8 +1960,6 @@ class Tests(dbusmock.DBusTestCase):
 
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "balanced")
         self.assertEqual(len(self.get_dbus_property("ActiveProfileHolds")), 0)
-
-        self.stop_daemon()
 
     def test_get_version_prop(self):
         """Checks that the version property is advertised"""
@@ -2047,8 +1993,6 @@ class Tests(dbusmock.DBusTestCase):
         profiles = self.get_dbus_property("Profiles")
         self.assertEqual(len(profiles), 3)
         self.assertEqual(self.get_dbus_property("PerformanceDegraded"), "")
-
-        self.stop_daemon()
 
     def test_powerprofilesctl_version_command(self):
         """Check powerprofilesctl version command works"""
@@ -2139,7 +2083,6 @@ class Tests(dbusmock.DBusTestCase):
                 universal_newlines=True,
             )
         self.assertNotIn("Traceback", error.exception.stderr)
-        self.stop_daemon()
 
     #
     # Helper methods
