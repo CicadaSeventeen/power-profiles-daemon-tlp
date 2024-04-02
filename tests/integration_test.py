@@ -726,6 +726,49 @@ class Tests(dbusmock.DBusTestCase):
             os.path.join(dir1, "energy_performance_preference"), "balance_performance"
         )
 
+    def test_intel_pstate_reapply_on_resume_from_sleep(self):
+        # Create CPU with preference
+        dir1 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy0/"
+        )
+        os.makedirs(dir1)
+        energy_prefs = os.path.join(dir1, "energy_performance_preference")
+        self.write_file_contents(energy_prefs, "performance\n")
+        pstate_dir = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/intel_pstate"
+        )
+        os.makedirs(pstate_dir)
+        self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
+
+        _, obj_logind, _ = self.start_dbus_template("logind", {})
+
+        self.start_daemon()
+        self.assert_dbus_property_eventually_is(
+            "ActiveProfile", "balanced", keep_checking=100
+        )
+
+        # Simulate system changing to performance mode just before going to suspend
+        self.write_file_contents(energy_prefs, "performance\n")
+        self.assert_file_eventually_contains(
+            energy_prefs, "performance\n", keep_checking=500
+        )
+
+        obj_logind.EmitSignal(
+            "org.freedesktop.login1.Manager", "PrepareForSleep", "b", [True]
+        )
+        self.assert_file_eventually_contains(
+            energy_prefs, "performance\n", keep_checking=500
+        )
+
+        # Check that on resume the value is reset to the expected one.
+        obj_logind.EmitSignal(
+            "org.freedesktop.login1.Manager", "PrepareForSleep", "b", [False]
+        )
+
+        self.assert_file_eventually_contains(
+            energy_prefs, "balance_performance", timeout=3000, keep_checking=100
+        )
+
     def test_intel_pstate_error(self):
         """Intel P-State driver in error state"""
 
