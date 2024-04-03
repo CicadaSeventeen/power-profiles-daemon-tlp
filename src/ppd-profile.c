@@ -38,3 +38,12 @@ ppd_profile_has_single_flag (PpdProfile profile)
 
   return FALSE;
 }
+
+const char *
+ppd_power_changed_reason_to_str (PpdPowerChangedReason reason)
+{
+  g_autoptr(GEnumClass) klass = g_type_class_ref (PPD_TYPE_POWER_CHANGED_REASON);
+  GEnumValue *value = g_enum_get_value (klass, reason);
+  const gchar *name = value ? value->value_nick : "";
+  return name;
+}

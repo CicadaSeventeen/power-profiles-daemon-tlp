@@ -67,3 +67,5 @@ typedef enum{
 const char *ppd_profile_to_str (PpdProfile profile);
 PpdProfile ppd_profile_from_str (const char *str);
 gboolean ppd_profile_has_single_flag (PpdProfile profile);
+
+const char *ppd_power_changed_reason_to_str (PpdPowerChangedReason reason);

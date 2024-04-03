@@ -1071,7 +1071,8 @@ upower_battery_set_power_changed_reason (PpdApp                *data,
     return;
 
   data->power_changed_reason = reason;
-  g_info ("Power Changed because of reason %d", reason);
+  g_info ("Power Changed because of reason %s",
+          ppd_power_changed_reason_to_str (reason));
 
   for (guint i = 0; i < data->actions->len; i++) {
     g_autoptr(GError) error = NULL;
