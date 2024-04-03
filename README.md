@@ -179,8 +179,8 @@ in one of two ways:
 
 1. Adding `amdgpu.abmlevel=0` to the kernel command line.  This will disable abm
    value changes entirely.
-2. By using `POWER_PROFILE_DAEMON_ACTION_BLOCK=amdgpu_panel_power` in the
-   `power-profiles-daemon` environment as described below. This will allow you to
+2. By using `--block-action=amdgpu_panel_power` in the
+   `power-profiles-daemon` `ExecStart` command. This will allow you to
    still change values manually in sysfs but `power-profiles-daemon` will not
    change anything.
 
@@ -188,8 +188,7 @@ in one of two ways:
 
 Power-profiles daemon will load all supported drivers and actions by default.
 If you have a problem with a given driver or action, you can disable it by
-populating the `POWER_PROFILE_DAEMON_DRIVER_BLOCK` or `POWER_PROFILE_DAEMON_ACTION_BLOCK`
-environment variables with the name of the driver or action you want to disable
+using `--block-action` or `--block-driver` with the name of the driver or action you want to disable
 in the environment that launches the daemon (such as the systemd unit file).
 
 For example to edit the unit:
@@ -198,12 +197,11 @@ For example to edit the unit:
 sudo systemctl edit power-profiles-daemon.service
 ```
 
-Then add to the drop-in file:
+Then modify the Execstart line to the drop-in file:
 
 ```text
 [Service]
-Environment=POWER_PROFILE_DAEMON_DRIVER_BLOCK=xxx
-Environment=POWER_PROFILE_DAEMON_ACTION_BLOCK=yyy
+ExecStart=/usr/libexec/power-profiles-daemon --block-action=FOO
 ```
 
 Then restart the service:

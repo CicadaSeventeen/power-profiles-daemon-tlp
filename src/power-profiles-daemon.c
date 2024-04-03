@@ -54,6 +54,8 @@ typedef struct {
   GOptionGroup *group;
   GLogLevelFlags log_level;
   gboolean replace;
+  GStrv blocked_drivers;
+  GStrv blocked_actions;
 } DebugOptions;
 
 typedef struct {
@@ -84,6 +86,9 @@ typedef struct {
   PpdPowerChangedReason power_changed_reason;
 
   guint logind_sleep_signal_id;
+
+  GStrv blocked_drivers;
+  GStrv blocked_actions;
 } PpdApp;
 
 typedef struct {
@@ -97,9 +102,11 @@ typedef struct {
 static void
 debug_options_free(DebugOptions *options)
 {
-  g_option_group_unref (options->group);
+  g_strfreev (options->blocked_drivers);
+  g_strfreev (options->blocked_actions);
   g_free (options);
 }
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (DebugOptions, debug_options_free)
 
 static void
 profile_hold_free (ProfileHold *hold)
@@ -1250,32 +1257,34 @@ stop_profile_drivers (PpdApp *data)
 }
 
 static gboolean
-action_blocked (PpdAction *action)
+action_blocked (PpdApp *app, PpdAction *action)
 {
   const gchar *action_name = ppd_action_get_action_name (action);
-  const gchar *env = g_getenv ("POWER_PROFILE_DAEMON_ACTION_BLOCK");
+  gboolean blocked;
 
-  if (env == NULL)
+  if (app->blocked_actions == NULL || g_strv_length (app->blocked_actions) == 0)
     return FALSE;
 
-  g_auto(GStrv) actions = NULL;
+  blocked = g_strv_contains ((const gchar *const *) app->blocked_actions, action_name);
 
-  actions = g_strsplit (env, ",", -1);
-  return g_strv_contains ((const gchar *const *)actions, action_name);
+  if (blocked)
+    g_debug ("Action '%s' is blocked", action_name);
+  return blocked;
 }
 
 static gboolean
-driver_blocked (PpdDriver *driver)
+driver_blocked (PpdApp *app, PpdDriver *driver)
 {
   const gchar *driver_name = ppd_driver_get_driver_name (driver);
-  const gchar *env = g_getenv ("POWER_PROFILE_DAEMON_DRIVER_BLOCK");
+  gboolean blocked;
 
-  if (env == NULL)
+  if (app->blocked_drivers == NULL || g_strv_length (app->blocked_drivers) == 0)
     return FALSE;
 
-  g_auto(GStrv) drivers = NULL;
-  drivers = g_strsplit (env, ",", -1);
-  return g_strv_contains ((const char **) drivers, driver_name);
+  blocked = g_strv_contains ((const gchar *const *) app->blocked_drivers, driver_name);
+  if (blocked)
+    g_debug ("Driver '%s' is blocked", driver_name);
+  return blocked;
 }
 
 static void
@@ -1299,7 +1308,7 @@ start_profile_drivers (PpdApp *data)
       PpdProbeResult result;
 
       g_debug ("Handling driver '%s'", ppd_driver_get_driver_name (driver));
-      if (driver_blocked (driver)) {
+      if (driver_blocked (data, driver)) {
         g_debug ("Driver '%s' is blocked, skipping", ppd_driver_get_driver_name (driver));
         continue;
       }
@@ -1366,7 +1375,7 @@ start_profile_drivers (PpdApp *data)
 
       g_debug ("Handling action '%s'", ppd_action_get_action_name (action));
 
-      if (action_blocked (action)) {
+      if (action_blocked (data, action)) {
         g_debug ("Action '%s' is blocked, skipping", ppd_action_get_action_name (action));
         continue;
       }
@@ -1523,6 +1532,8 @@ free_app_data (PpdApp *data)
   g_clear_handle_id (&data->name_id, g_bus_unown_name);
   g_clear_handle_id (&data->legacy_name_id, g_bus_unown_name);
 
+  g_strfreev (data->blocked_drivers);
+  g_strfreev (data->blocked_actions);
   g_clear_pointer (&data->config_path, g_free);
   g_clear_pointer (&data->config, g_key_file_unref);
   g_clear_pointer (&data->probed_drivers, g_ptr_array_unref);
@@ -1653,6 +1664,24 @@ debug_pre_parse_hook (GOptionContext *context,
       "Replace the running instance of power-profiles-daemon",
       NULL,
     },
+    {
+      "block-driver",
+      0,
+      G_OPTION_FLAG_NONE,
+      G_OPTION_ARG_STRING_ARRAY,
+      &data->blocked_drivers,
+      "Block driver(s) from loading",
+      NULL,
+    },
+    {
+      "block-action",
+      0,
+      G_OPTION_FLAG_NONE,
+      G_OPTION_ARG_STRING_ARRAY,
+      &data->blocked_actions,
+      "Block action(s) from loading",
+      NULL,
+    },
     { NULL }
   };
   g_option_group_add_entries (group, options);
@@ -1675,7 +1704,7 @@ debug_post_parse_hook (GOptionContext *context,
 
 int main (int argc, char **argv)
 {
-  DebugOptions *debug_options = g_new0 (DebugOptions, 1);
+  g_autoptr(DebugOptions) debug_options = g_new0 (DebugOptions, 1);
   g_autoptr(PpdApp) data = NULL;
   g_autoptr(GOptionContext) option_context = NULL;
   g_autoptr(GError) error = NULL;
@@ -1685,7 +1714,7 @@ int main (int argc, char **argv)
                                              "Debugging Options",
                                              "Show debugging options",
                                              debug_options,
-                                             (GDestroyNotify)debug_options_free);
+                                             NULL);
   g_option_group_set_parse_hooks (debug_options->group,
                                   debug_pre_parse_hook,
                                   debug_post_parse_hook);
@@ -1707,6 +1736,8 @@ int main (int argc, char **argv)
   data->profile_holds = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, (GDestroyNotify) profile_hold_free);
   data->active_profile = PPD_PROFILE_BALANCED;
   data->selected_profile = PPD_PROFILE_BALANCED;
+  data->blocked_drivers = g_steal_pointer (&debug_options->blocked_drivers);
+  data->blocked_actions = g_steal_pointer (&debug_options->blocked_actions);
 
   g_unix_signal_add (SIGTERM, quit_signal_callback, data);
   g_unix_signal_add (SIGINT, quit_signal_callback, data);

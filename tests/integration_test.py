@@ -164,7 +164,7 @@ class Tests(dbusmock.DBusTestCase):
     # Daemon control and D-BUS I/O
     #
 
-    def start_daemon(self):
+    def start_daemon(self, args=None):
         """Start daemon and create DBus proxy.
 
         When done, this sets self.proxy as the Gio.DBusProxy for power-profiles-daemon.
@@ -178,6 +178,8 @@ class Tests(dbusmock.DBusTestCase):
         env["LD_PRELOAD"] = os.getenv("PPD_LD_PRELOAD") + " " + os.getenv("LD_PRELOAD")
         self.log = tempfile.NamedTemporaryFile()  # pylint: disable=consider-using-with
         daemon_path = [self.daemon_path, "-vv"]
+        if args:
+            daemon_path += args
         if os.getenv("PPD_TEST_WRAPPER"):
             daemon_path = os.getenv("PPD_TEST_WRAPPER").split(" ") + daemon_path
         elif os.getenv("VALGRIND"):
@@ -908,8 +910,7 @@ class Tests(dbusmock.DBusTestCase):
         )
 
         # Block panel_power action
-        os.environ["POWER_PROFILE_DAEMON_ACTION_BLOCK"] = "amdgpu_panel_power"
-        self.start_daemon()
+        self.start_daemon(["--block-action", "amdgpu_panel_power"])
         self.assertNotIn("amdgpu_panel_power", self.get_dbus_property("Actions"))
 
     def test_driver_blocklist(self):
@@ -957,10 +958,8 @@ class Tests(dbusmock.DBusTestCase):
         self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
 
         # block platform profile
-        os.environ["POWER_PROFILE_DAEMON_DRIVER_BLOCK"] = "platform_profile"
-
+        self.start_daemon(["--block-driver", "platform_profile"])
         # Verify that only amd-pstate is loaded
-        self.start_daemon()
         profiles = self.get_dbus_property("Profiles")
         self.assertEqual(len(profiles), 3)
         self.assertEqual(profiles[0]["Driver"], "multiple")
@@ -970,10 +969,10 @@ class Tests(dbusmock.DBusTestCase):
         self.stop_daemon()
 
         # block both drivers
-        os.environ["POWER_PROFILE_DAEMON_DRIVER_BLOCK"] = "amd_pstate,platform_profile"
-
+        self.start_daemon(
+            ["--block-driver", "amd_pstate", "--block-driver", "platform_profile"]
+        )
         # Verify that only placeholder is loaded
-        self.start_daemon()
         profiles = self.get_dbus_property("Profiles")
         self.assertEqual(len(profiles), 2)
         self.assertEqual(profiles[0]["PlatformDriver"], "placeholder")
