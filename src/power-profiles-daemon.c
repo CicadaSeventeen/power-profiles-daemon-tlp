@@ -15,6 +15,7 @@
 #include <glib-unix.h>
 #include <locale.h>
 #include <polkit/polkit.h>
+#include <stdlib.h>
 #include <stdio.h>
 
 #include "power-profiles-daemon-resources.h"
@@ -1398,7 +1399,7 @@ start_profile_drivers (PpdApp *data)
   }
 
   if (!has_required_drivers (data)) {
-    data->ret = 1;
+    data->ret = EXIT_FAILURE;
     g_warning ("Some non-optional profile drivers are missing, programmer error");
     g_main_loop_quit (data->main_loop);
   }
