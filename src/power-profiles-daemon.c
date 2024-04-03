@@ -51,6 +51,12 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (PolkitSubject, g_object_unref)
 #endif
 
 typedef struct {
+  GOptionGroup *group;
+  GLogLevelFlags log_level;
+  gboolean replace;
+} DebugOptions;
+
+typedef struct {
   GMainLoop *main_loop;
   GDBusConnection *connection;
   GCancellable *cancellable;
@@ -71,7 +77,6 @@ typedef struct {
   PpdDriverPlatform *platform_driver;
   GPtrArray *actions;
   GHashTable *profile_holds;
-  GLogLevelFlags log_level;
 
   GDBusProxy *upower_proxy;
   gulong upower_watch_id;
@@ -88,6 +93,13 @@ typedef struct {
   char *requester;
   char *requester_iface;
 } ProfileHold;
+
+static void
+debug_options_free(DebugOptions *options)
+{
+  g_option_group_unref (options->group);
+  g_free (options);
+}
 
 static void
 profile_hold_free (ProfileHold *hold)
@@ -1549,7 +1561,7 @@ debug_handler_cb (const gchar *log_domain,
                   const gchar *message,
                   gpointer user_data)
 {
-  PpdApp *data = user_data;
+  DebugOptions *data = user_data;
   g_autoptr(GString) domain = NULL;
   gboolean use_color;
   gint color;
@@ -1591,22 +1603,96 @@ quit_signal_callback (gpointer user_data)
   return FALSE;
 }
 
+static gboolean
+verbose_arg_cb (const gchar *option_name,
+                const gchar *value,
+                gpointer user_data,
+                GError **error)
+{
+  DebugOptions *data = user_data;
+
+  if (data->log_level == G_LOG_LEVEL_MESSAGE) {
+          data->log_level = G_LOG_LEVEL_INFO;
+          return TRUE;
+  }
+  if (data->log_level == G_LOG_LEVEL_INFO) {
+          data->log_level = G_LOG_LEVEL_DEBUG;
+          return TRUE;
+  }
+  g_set_error_literal (error,
+                       G_OPTION_ERROR,
+                       G_OPTION_ERROR_FAILED,
+                       "No further debug level supported");
+  return FALSE;
+}
+
+static gboolean
+debug_pre_parse_hook (GOptionContext *context,
+                      GOptionGroup *group,
+                      gpointer user_data,
+                      GError **error)
+{
+  DebugOptions *data = user_data;
+
+  const GOptionEntry options[] = {
+    {
+      "verbose",
+      'v',
+      G_OPTION_FLAG_NO_ARG,
+      G_OPTION_ARG_CALLBACK,
+      (GOptionArgFunc)verbose_arg_cb,
+      "Show extra debugging information",
+      NULL,
+    },
+    {
+      "replace",
+      'r',
+      G_OPTION_FLAG_NONE,
+      G_OPTION_ARG_NONE,
+      &data->replace,
+      "Replace the running instance of power-profiles-daemon",
+      NULL,
+    },
+    { NULL }
+  };
+  g_option_group_add_entries (group, options);
+
+  return TRUE;
+}
+
+static gboolean
+debug_post_parse_hook (GOptionContext *context,
+                       GOptionGroup *group,
+                       gpointer user_data,
+                       GError **error)
+{
+  DebugOptions *debug = (DebugOptions *)user_data;
+
+  g_log_set_default_handler (debug_handler_cb, debug);
+
+  return TRUE;
+}
+
 int main (int argc, char **argv)
 {
+  DebugOptions *debug_options = g_new0 (DebugOptions, 1);
   g_autoptr(PpdApp) data = NULL;
   g_autoptr(GOptionContext) option_context = NULL;
   g_autoptr(GError) error = NULL;
-  gboolean verbose = FALSE;
-  gboolean replace = FALSE;
-  const GOptionEntry options[] = {
-    { "verbose", 'v', 0, G_OPTION_ARG_NONE, &verbose, "Show extra debugging information", NULL },
-    { "replace", 'r', 0, G_OPTION_ARG_NONE, &replace, "Replace the running instance of power-profiles-daemon", NULL },
-    { NULL}
-  };
+
+  debug_options->log_level = G_LOG_LEVEL_MESSAGE;
+  debug_options->group = g_option_group_new ("debug",
+                                             "Debugging Options",
+                                             "Show debugging options",
+                                             debug_options,
+                                             (GDestroyNotify)debug_options_free);
+  g_option_group_set_parse_hooks (debug_options->group,
+                                  debug_pre_parse_hook,
+                                  debug_post_parse_hook);
 
   setlocale (LC_ALL, "");
   option_context = g_option_context_new ("");
-  g_option_context_add_main_entries (option_context, options, NULL);
+  g_option_context_add_group (option_context, debug_options->group);
 
   if (!g_option_context_parse (option_context, &argc, &argv, &error)) {
     g_print ("Failed to parse arguments: %s\n", error->message);
@@ -1621,13 +1707,9 @@ int main (int argc, char **argv)
   data->profile_holds = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, (GDestroyNotify) profile_hold_free);
   data->active_profile = PPD_PROFILE_BALANCED;
   data->selected_profile = PPD_PROFILE_BALANCED;
-  data->log_level = verbose ? G_LOG_LEVEL_DEBUG : G_LOG_LEVEL_MESSAGE;
 
   g_unix_signal_add (SIGTERM, quit_signal_callback, data);
   g_unix_signal_add (SIGINT, quit_signal_callback, data);
-
-  /* redirect all domains */
-  g_log_set_default_handler (debug_handler_cb, data);
 
   g_info ("Starting power-profiles-daemon version "VERSION);
 
@@ -1635,7 +1717,7 @@ int main (int argc, char **argv)
   ppd_app = data;
 
   /* Set up D-Bus */
-  if (!setup_dbus (data, replace, &error)) {
+  if (!setup_dbus (data, debug_options->replace, &error)) {
     g_error ("Failed to start dbus: %s", error->message);
     return 1;
   }

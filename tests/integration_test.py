@@ -177,7 +177,7 @@ class Tests(dbusmock.DBusTestCase):
         env["UMOCKDEV_DIR"] = self.testbed.get_root_dir()
         env["LD_PRELOAD"] = os.getenv("PPD_LD_PRELOAD") + " " + os.getenv("LD_PRELOAD")
         self.log = tempfile.NamedTemporaryFile()  # pylint: disable=consider-using-with
-        daemon_path = [self.daemon_path, "-v"]
+        daemon_path = [self.daemon_path, "-vv"]
         if os.getenv("PPD_TEST_WRAPPER"):
             daemon_path = os.getenv("PPD_TEST_WRAPPER").split(" ") + daemon_path
         elif os.getenv("VALGRIND"):

@@ -95,7 +95,7 @@ gdbus call --system --dest org.freedesktop.UPower.PowerProfiles \
 If that doesn't work, please file an issue, attach the output of:
 
 ```sh
-sudo /usr/libexec/power-profiles-daemon -r -v
+sudo /usr/libexec/power-profiles-daemon -r -vv
 ```
 
 ## Operations on Intel-based machines
