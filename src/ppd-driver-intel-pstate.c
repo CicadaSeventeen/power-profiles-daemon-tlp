@@ -32,9 +32,6 @@ struct _PpdDriverIntelPstate
   PpdProfile activated_profile;
   GList *epp_devices; /* GList of paths */
   GList *epb_devices; /* GList of paths */
-  GDBusConnection *system_bus;
-  guint sleep_signal_id;
-  GCancellable *cancellable;
   GFileMonitor *no_turbo_mon;
   char *no_turbo_path;
 };
@@ -132,66 +129,28 @@ sys_has_turbo (void)
   return has_turbo;
 }
 
-static void
-prepare_for_sleep_cb (GDBusConnection *connection,
-                      const gchar     *sender_name,
-                      const gchar     *object_path,
-                      const gchar     *interface_name,
-                      const gchar     *signal_name,
-                      GVariant        *parameters,
-                      gpointer         user_data)
+static gboolean
+ppd_driver_intel_pstate_prepare_for_sleep (PpdDriver  *driver,
+                                           gboolean    start,
+                                           GError    **error)
 {
-  PpdDriverIntelPstate *pstate = user_data;
-  g_autoptr(GError) error = NULL;
-  gboolean start;
+  PpdDriverIntelPstate *pstate = PPD_DRIVER_INTEL_PSTATE (driver);
+  g_autoptr(GError) local_error = NULL;
 
-  g_variant_get (parameters, "(b)", &start);
   if (start)
-    return;
+    return TRUE;
 
-  g_debug ("System woke up from suspend, re-applying energy_perf_bias");
+  g_debug ("Re-applying energy_perf_bias");
   if (!ppd_driver_intel_pstate_activate_profile (PPD_DRIVER (pstate),
                                                  pstate->activated_profile,
                                                  PPD_PROFILE_ACTIVATION_REASON_RESUME,
-                                                 &error)) {
-    g_warning ("Could not reapply energy_perf_bias preference on resume: %s",
-               error->message);
-  }
-}
-
-static void
-system_bus_gotten_cb (GObject      *object,
-                      GAsyncResult *res,
-                      gpointer      user_data)
-{
-  PpdDriverIntelPstate *pstate = user_data;
-  g_autoptr(GError) error = NULL;
-  GDBusConnection *system_bus;
-
-  system_bus = g_bus_get_finish (res, &error);
-
-  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-    return;
-
-  g_clear_object (&pstate->cancellable);
-
-  if (!system_bus) {
-    g_debug ("Could not create connect to system bus: %s", error->message);
-    return;
+                                                 &local_error)) {
+    g_propagate_prefixed_error (error, g_steal_pointer (&local_error),
+                                "Could not reapply energy_perf_bias preference on resume: ");
+    return FALSE;
   }
 
-  pstate->system_bus = system_bus;
-  pstate->sleep_signal_id =
-    g_dbus_connection_signal_subscribe (system_bus,
-                                        SYSTEMD_DBUS_NAME,
-                                        SYSTEMD_DBUS_INTERFACE,
-                                        "PrepareForSleep",
-                                        SYSTEMD_DBUS_PATH,
-                                        NULL,
-                                        G_DBUS_SIGNAL_FLAGS_NONE,
-                                        prepare_for_sleep_cb,
-                                        pstate,
-                                        NULL);
+  return TRUE;
 }
 
 static PpdProbeResult
@@ -223,14 +182,6 @@ probe_epb (PpdDriverIntelPstate *pstate)
     pstate->epb_devices = g_list_prepend (pstate->epb_devices, g_steal_pointer (&path));
     ret = PPD_PROBE_RESULT_SUCCESS;
   }
-
-  pstate->cancellable = g_cancellable_new ();
-
-  /* TODO: Maybe get the system bus directly from the daemon? */
-  g_bus_get (G_BUS_TYPE_SYSTEM,
-             pstate->cancellable,
-             system_bus_gotten_cb,
-             pstate);
 
   return ret;
 }
@@ -421,17 +372,10 @@ ppd_driver_intel_pstate_finalize (GObject *object)
 
   driver = PPD_DRIVER_INTEL_PSTATE (object);
 
-  if (driver->sleep_signal_id) {
-    g_dbus_connection_signal_unsubscribe (driver->system_bus, driver->sleep_signal_id);
-    driver->sleep_signal_id = 0;
-  }
-
   g_clear_list (&driver->epp_devices, g_free);
   g_clear_list (&driver->epb_devices, g_free);
   g_clear_pointer (&driver->no_turbo_path, g_free);
   g_clear_object (&driver->no_turbo_mon);
-  g_cancellable_cancel (driver->cancellable);
-  g_clear_object (&driver->cancellable);
   G_OBJECT_CLASS (ppd_driver_intel_pstate_parent_class)->finalize (object);
 }
 
@@ -448,6 +392,7 @@ ppd_driver_intel_pstate_class_init (PpdDriverIntelPstateClass *klass)
   driver_class = PPD_DRIVER_CLASS (klass);
   driver_class->probe = ppd_driver_intel_pstate_probe;
   driver_class->activate_profile = ppd_driver_intel_pstate_activate_profile;
+  driver_class->prepare_to_sleep = ppd_driver_intel_pstate_prepare_for_sleep;
 }
 
 static void

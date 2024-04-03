@@ -40,6 +40,10 @@
 #define UPOWER_DBUS_PATH                  "/org/freedesktop/UPower"
 #define UPOWER_DBUS_INTERFACE             "org.freedesktop.UPower"
 
+#define LOGIND_DBUS_NAME                  "org.freedesktop.login1"
+#define LOGIND_DBUS_PATH                  "/org/freedesktop/login1"
+#define LOGIND_DBUS_INTERFACE             "org.freedesktop.login1.Manager"
+
 #ifndef POLKIT_HAS_AUTOPOINTERS
 /* FIXME: Remove this once we're fine to depend on polkit 0.114 */
 G_DEFINE_AUTOPTR_CLEANUP_FUNC (PolkitAuthorizationResult, g_object_unref)
@@ -73,6 +77,8 @@ typedef struct {
   gulong upower_watch_id;
   gulong upower_properties_id;
   PpdPowerChangedReason power_changed_reason;
+
+  guint logind_sleep_signal_id;
 } PpdApp;
 
 typedef struct {
@@ -1141,6 +1147,46 @@ on_upower_proxy_cb (GObject *source_object,
   upower_battery_update_state (data);
 }
 
+static void
+on_logind_prepare_for_sleep_cb (GDBusConnection *connection,
+                                const gchar     *sender_name,
+                                const gchar     *object_path,
+                                const gchar     *interface_name,
+                                const gchar     *signal_name,
+                                GVariant        *parameters,
+                                gpointer         user_data)
+{
+  PpdApp *data = user_data;
+  gboolean start;
+
+  g_variant_get (parameters, "(b)", &start);
+
+  if (start)
+    g_debug ("System preparing for suspend");
+  else
+    g_debug ("System woke up from suspend");
+
+  if (PPD_IS_DRIVER_CPU (data->cpu_driver)) {
+    g_autoptr(GError) error = NULL;
+
+    if (!ppd_driver_prepare_to_sleep (PPD_DRIVER (data->cpu_driver), start, &error)) {
+      g_warning ("failed to notify driver %s: %s",
+                 ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)),
+                 error->message);
+    }
+  }
+
+  if (PPD_IS_DRIVER_PLATFORM (data->platform_driver)) {
+    g_autoptr(GError) error = NULL;
+
+    if (!ppd_driver_prepare_to_sleep (PPD_DRIVER (data->platform_driver), start, &error)) {
+      g_warning ("failed to notify driver %s: %s",
+                 ppd_driver_get_driver_name (PPD_DRIVER (data->platform_driver)),
+                 error->message);
+    }
+  }
+}
+
 static gboolean
 has_required_drivers (PpdApp *data)
 {
@@ -1173,6 +1219,11 @@ driver_probe_request_cb (PpdDriver *driver,
 static void
 stop_profile_drivers (PpdApp *data)
 {
+  if (data->logind_sleep_signal_id) {
+    g_dbus_connection_signal_unsubscribe (data->connection, data->logind_sleep_signal_id);
+    data->logind_sleep_signal_id = 0;
+  }
+
   upower_battery_set_power_changed_reason (data, PPD_POWER_CHANGED_REASON_UNKNOWN);
   release_all_profile_holds (data);
   g_cancellable_cancel (data->cancellable);
@@ -1221,6 +1272,7 @@ start_profile_drivers (PpdApp *data)
   guint i;
   g_autoptr(GError) initial_error = NULL;
   gboolean needs_battery_monitor = FALSE;
+  gboolean needs_suspend_monitor = FALSE;
 
   data->cancellable = g_cancellable_new ();
 
@@ -1286,6 +1338,9 @@ start_profile_drivers (PpdApp *data)
       if (PPD_DRIVER_GET_CLASS (driver)->power_changed != NULL)
         needs_battery_monitor = TRUE;
 
+      if (PPD_DRIVER_GET_CLASS (driver)->prepare_to_sleep != NULL)
+        needs_suspend_monitor = TRUE;
+
       g_signal_connect (G_OBJECT (driver), "notify::performance-degraded",
                         G_CALLBACK (driver_performance_degraded_changed_cb), data);
       g_signal_connect (G_OBJECT (driver), "profile-changed",
@@ -1348,6 +1403,23 @@ start_profile_drivers (PpdApp *data)
                       data);
   } else {
     g_debug ("No battery state monitor required by any driver, let's skip it");
+  }
+
+  if (needs_suspend_monitor) {
+    g_debug ("Suspension state monitor required, monitoring logind...");
+    data->logind_sleep_signal_id =
+      g_dbus_connection_signal_subscribe (data->connection,
+                                          LOGIND_DBUS_NAME,
+                                          LOGIND_DBUS_INTERFACE,
+                                          "PrepareForSleep",
+                                          LOGIND_DBUS_PATH,
+                                          NULL,
+                                          G_DBUS_SIGNAL_FLAGS_NONE,
+                                          on_logind_prepare_for_sleep_cb,
+                                          data,
+                                          NULL);
+  } else {
+    g_debug ("No suspension monitor required by any driver, let's skip it");
   }
 }
 
