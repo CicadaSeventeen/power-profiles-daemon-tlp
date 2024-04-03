@@ -44,6 +44,14 @@ upower_dep = dependency('upower-glib')
 polkit_gobject_dep = dependency('polkit-gobject-1', version: '>= 0.99')
 polkit_policy_directory = polkit_gobject_dep.get_variable('policydir')
 
+python3_required_modules = []
+gi_required_modules = {}
+
+powerprofilesctl_required_gi_modules = {
+  'GLib': '2.0',
+  'Gio': '2.0',
+}
+
 gnome = import('gnome')
 
 add_global_arguments('-D_GNU_SOURCE=1', language: 'c')
@@ -57,6 +65,9 @@ endif
 xmllint = find_program('xmllint', required: false)
 
 argparse_manpage = find_program('argparse-manpage', required: get_option('manpage'))
+if argparse_manpage.found()
+  gi_required_modules += powerprofilesctl_required_gi_modules
+endif
 
 bus_names = {
   'org.freedesktop.UPower.PowerProfiles': '/org/freedesktop/UPower/PowerProfiles',
@@ -67,17 +78,51 @@ address_sanitizer = get_option('b_sanitize') == 'address' or \
   get_option('b_sanitize') == 'address,undefined' or \
   get_option('b_sanitize') == 'leak'
 
+bashcomp = dependency('bash-completion', required: get_option('bashcomp'))
+zshcomp = get_option('zshcomp') != ''
+
 python = import('python')
 python3 = python.find_installation('python3')
 
-have_shtab = run_command(
-  [python3, '-c', 'import shtab'], check: false).returncode() == 0
-if not have_shtab
-  message('''python3-shtab not found, completions won't be generated''')
+if bashcomp.found() or zshcomp
+  python3_required_modules += 'shtab'
+  gi_required_modules += powerprofilesctl_required_gi_modules
 endif
 
-bashcomp = dependency('bash-completion', required: get_option('bashcomp').disable_auto_if(not have_shtab))
-zshcomp = have_shtab and get_option('zshcomp') != ''
+if get_option('tests')
+  python3_required_modules += [
+    'dbusmock',
+  ]
+  gi_required_modules += powerprofilesctl_required_gi_modules
+  gi_required_modules += {
+    'UMockdev': '1.0',
+  }
+endif
+
+# Python 3 required modules
+if gi_required_modules.keys().length() > 0
+  python3_required_modules += 'gi'
+endif
+
+foreach p : python3_required_modules
+  # Source: https://docs.python.org/3/library/importlib.html#checking-if-a-module-can-be-imported
+  script = 'import importlib.util; import sys; exit(1) if importlib.util.find_spec(\''+ p +'\') is None else exit(0)'
+  if run_command(python3, '-c', script, check: false).returncode() == 0
+    message('Python3 module \'@0@\' found: YES'.format(p))
+  else
+    error('Python3 module \'@0@\' required for running tests but not found'.format(p))
+  endif
+endforeach
+
+foreach module, version : gi_required_modules
+  script = 'import gi; gi.require_version("@0@", "@1@")'.format(module, version)
+  if run_command(python3, '-c', script, check: false).returncode() == 0
+    message('Python3 module \'@0@\' found: YES @1@'.format(module, version))
+  else
+    error('''GObject Introspection module '@0@' version @1@ required for running tests but not found'''.format(
+      module, version))
+  endif
+endforeach
 
 subdir('src')
 subdir('data')
@@ -92,34 +137,7 @@ if get_option('gtk_doc')
   subdir('docs')
 endif
 
-python = import('python')
-python3 = python.find_installation('python3')
-
 if get_option('tests')
-  # Python 3 required modules
-  python3_required_modules = ['dbusmock', 'gi']
-  gi_required_modules = {
-    'GLib': '2.0',
-    'Gio': '2.0',
-    'UMockdev': '1.0',
-  }
-
-  foreach p : python3_required_modules
-    # Source: https://docs.python.org/3/library/importlib.html#checking-if-a-module-can-be-imported
-    script = 'import importlib.util; import sys; exit(1) if importlib.util.find_spec(\''+ p +'\') is None else exit(0)'
-    if run_command(python3, '-c', script, check: false).returncode() != 0
-      error('Python3 module \'' + p + '\' required for running tests but not found')
-    endif
-  endforeach
-
-  foreach module, version : gi_required_modules
-    script = 'import gi; gi.require_version("@0@", "@1@")'.format(module, version)
-    if run_command(python3, '-c', script, check: false).returncode() != 0
-      error('''GObject Introspection module '@0@' version @1@ required for running tests but not found'''.format(
-        module, version))
-    endif
-  endforeach
-
   subdir('tests')
 endif
 
