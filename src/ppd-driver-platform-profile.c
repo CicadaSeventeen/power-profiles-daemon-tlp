@@ -195,6 +195,7 @@ lapmode_changed (GFileMonitor      *monitor,
                  gpointer           user_data)
 {
   PpdDriverPlatformProfile *self = user_data;
+
   g_debug (LAPMODE_SYSFS_NAME " attribute changed (event: %d)", event_type);
   g_return_if_fail (event_type != G_FILE_MONITOR_EVENT_DELETED);
 
