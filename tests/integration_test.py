@@ -214,7 +214,9 @@ class Tests(dbusmock.DBusTestCase):
         self.assert_eventually(
             lambda: self.proxy and self.proxy.get_name_owner(),
             timeout=wait_time * 1000,
-            message=lambda: f"daemon did not start in {wait_time} seconds",
+            message=lambda: f"daemon did not start in {wait_time} seconds: "
+            + f"proxy is {self.proxy} and owner "
+            + f"{self.proxy.get_name_owner() if self.proxy else 'None'}",
         )
 
         def properties_changed_cb(_, changed_properties, invalidated):
