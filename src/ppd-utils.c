@@ -62,6 +62,23 @@ gboolean ppd_utils_write (const char  *filename,
   return TRUE;
 }
 
+gboolean
+ppd_utils_write_files (GPtrArray   *filenames,
+                       const char  *value,
+                       GError     **error)
+{
+  g_return_val_if_fail (filenames != NULL, FALSE);
+
+  for (guint i = 0; i < filenames->len; i++) {
+    const char *file = g_ptr_array_index (filenames, i);
+
+    if (!ppd_utils_write (file, value, error))
+      return FALSE;
+  }
+
+  return TRUE;
+}
+
 gboolean ppd_utils_write_sysfs (GUdevDevice  *device,
                                 const char   *attribute,
                                 const char   *value,

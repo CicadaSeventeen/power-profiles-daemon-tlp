@@ -338,17 +338,17 @@ apply_pref_to_devices (PpdDriver   *driver,
   g_return_val_if_fail ((pstate->epp_devices && pstate->epp_devices->len != 0) ||
                         (pstate->epb_devices && pstate->epb_devices->len != 0), FALSE);
 
-  for (guint i = 0; pstate->epp_devices && i < pstate->epp_devices->len; i++) {
-    const char *path = g_ptr_array_index (pstate->epp_devices, i);
+  if (pstate->epp_devices) {
+    const char *epp_pref = profile_to_epp_pref (profile, pstate->on_battery);
 
-    if (!ppd_utils_write (path, profile_to_epp_pref (profile, pstate->on_battery), error))
+    if (!ppd_utils_write_files (pstate->epp_devices, epp_pref, error))
       return FALSE;
   }
 
-  for (guint i = 0; pstate->epb_devices && i < pstate->epb_devices->len; i++) {
-    const char *path = g_ptr_array_index (pstate->epb_devices, i);
+  if (pstate->epb_devices) {
+    const char *epb_pref = profile_to_epb_pref (profile, pstate->on_battery);
 
-    if (!ppd_utils_write (path, profile_to_epb_pref (profile, pstate->on_battery), error))
+    if (!ppd_utils_write_files (pstate->epb_devices, epb_pref, error))
       return FALSE;
   }
 

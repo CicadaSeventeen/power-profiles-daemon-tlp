@@ -16,6 +16,9 @@ char * ppd_utils_get_sysfs_path (const char *filename);
 gboolean ppd_utils_write (const char  *filename,
                           const char  *value,
                           GError     **error);
+gboolean ppd_utils_write_files (GPtrArray   *filenames,
+                                const char  *value,
+                                GError     **error);
 gboolean ppd_utils_write_sysfs (GUdevDevice  *device,
                                 const char   *attribute,
                                 const char   *value,
