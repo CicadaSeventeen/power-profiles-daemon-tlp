@@ -33,7 +33,10 @@ ppd_utils_write (const char  *filename,
                  const char  *value,
                  GError     **error)
 {
-  g_autofd int fd = -1;
+#if GLIB_CHECK_VERSION (2, 76, 0)
+  g_autofd
+#endif
+  int fd = -1;
   size_t size;
 
   g_return_val_if_fail (filename, FALSE);
@@ -57,6 +60,9 @@ ppd_utils_write (const char  *filename,
       g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
                    "Error writing '%s': %s", filename, g_strerror (errno));
       g_debug ("Error writing '%s': %s", filename, g_strerror (errno));
+#if !GLIB_CHECK_VERSION (2, 76, 0)
+      g_close (fd, NULL);
+#endif
       return FALSE;
     }
 
