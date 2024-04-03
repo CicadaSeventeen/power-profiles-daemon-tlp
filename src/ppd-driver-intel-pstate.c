@@ -331,22 +331,18 @@ apply_pref_to_devices (PpdDriver   *driver,
   if (profile == PPD_PROFILE_UNSET)
     return TRUE;
 
-  if (pstate->epp_devices) {
-    for (l = pstate->epp_devices; l != NULL; l = l->next) {
-      const char *path = l->data;
+  for (l = pstate->epp_devices; l != NULL; l = l->next) {
+    const char *path = l->data;
 
-      if (!ppd_utils_write (path, profile_to_epp_pref (profile, pstate->on_battery), error))
-        return FALSE;
-    }
+    if (!ppd_utils_write (path, profile_to_epp_pref (profile, pstate->on_battery), error))
+      return FALSE;
   }
 
-  if (pstate->epb_devices) {
-    for (l = pstate->epb_devices; l != NULL; l = l->next) {
-      const char *path = l->data;
+  for (l = pstate->epb_devices; l != NULL; l = l->next) {
+    const char *path = l->data;
 
-      if (!ppd_utils_write (path, profile_to_epb_pref (profile, pstate->on_battery), error))
-        return FALSE;
-    }
+    if (!ppd_utils_write (path, profile_to_epb_pref (profile, pstate->on_battery), error))
+      return FALSE;
   }
 
   pstate->activated_profile = profile;
