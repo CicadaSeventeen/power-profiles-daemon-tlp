@@ -10,7 +10,9 @@
 #define G_LOG_DOMAIN "Utils"
 
 #include "ppd-utils.h"
+#include <glib/gstdio.h>
 #include <gio/gio.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
 
@@ -26,39 +28,42 @@ ppd_utils_get_sysfs_path (const char *filename)
   return g_build_filename (root, filename, NULL);
 }
 
-gboolean ppd_utils_write (const char  *filename,
-                          const char  *value,
-                          GError     **error)
+gboolean
+ppd_utils_write (const char  *filename,
+                 const char  *value,
+                 GError     **error)
 {
-  FILE *sysfsfp;
-  int ret;
+  g_autofd int fd = -1;
+  size_t size;
 
   g_return_val_if_fail (filename, FALSE);
   g_return_val_if_fail (value, FALSE);
 
   g_debug ("Writing '%s' to '%s'", value, filename);
 
-  sysfsfp = fopen (filename, "w");
-  if (sysfsfp == NULL) {
+  fd = g_open (filename, O_WRONLY | O_TRUNC | O_SYNC);
+  if (fd == -1) {
     g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
                  "Could not open '%s' for writing", filename);
     g_debug ("Could not open for writing '%s'", filename);
     return FALSE;
   }
-  setbuf (sysfsfp, NULL);
-  ret = fprintf (sysfsfp, "%s", value);
-  if (ret <= 0) {
-    g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
-                 "Error writing '%s': %s", filename, g_strerror (errno));
-    g_debug ("Error writing '%s': %s", filename, g_strerror (errno));
-    return FALSE;
+
+  size = strlen (value);
+  while (size) {
+    ssize_t written = write (fd, value, size);
+
+    if (written == -1) {
+      g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
+                   "Error writing '%s': %s", filename, g_strerror (errno));
+      g_debug ("Error writing '%s': %s", filename, g_strerror (errno));
+      return FALSE;
+    }
+
+    g_return_val_if_fail (written <= size, FALSE);
+    size -= written;
   }
-  if (fclose (sysfsfp) != 0) {
-    g_set_error (error, G_IO_ERROR, g_io_error_from_errno (errno),
-                 "Error closing '%s': %s", filename, g_strerror (errno));
-    g_debug ("Error closing '%s': %s", filename, g_strerror (errno));
-    return FALSE;
-  }
+
   return TRUE;
 }
 

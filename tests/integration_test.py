@@ -735,6 +735,8 @@ class Tests(dbusmock.DBusTestCase):
             self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy0/"
         )
         os.makedirs(dir1)
+        gov_path = os.path.join(dir1, "scaling_governor")
+        self.write_file_contents(gov_path, "performance\n")
         energy_prefs = os.path.join(dir1, "energy_performance_preference")
         self.write_file_contents(energy_prefs, "performance\n")
         pstate_dir = os.path.join(
