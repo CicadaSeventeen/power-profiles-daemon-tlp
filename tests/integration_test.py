@@ -395,8 +395,9 @@ class Tests(dbusmock.DBusTestCase):
         Timeout is in milliseconds, defaulting to 5000 (5 seconds). message is
         printed on failure.
         """
-        if keep_checking > 0 and condition():
-            return
+        if not keep_checking:
+            if condition():
+                return
 
         done = False
 
