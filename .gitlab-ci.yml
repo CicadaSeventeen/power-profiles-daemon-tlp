@@ -127,6 +127,9 @@ dist_install:
     when: always
     paths:
     - _build/meson-logs/*.txt
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" ||
+           $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH)
 
 address_sanitizer:
   variables:
@@ -197,6 +200,9 @@ docs:
     - _build-docs/docs/html
     - _build-docs/docs/html/index.html
     expire_in: 1 week
+  rules:
+    - if: ($CI_PIPELINE_SOURCE == "merge_request_event" ||
+           $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH)
 
 pages:
   image: alpine:latest
