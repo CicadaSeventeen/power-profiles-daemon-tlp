@@ -1237,6 +1237,27 @@ driver_probe_request_cb (PpdDriver *driver,
 }
 
 static void
+disconnect_array_objects_signals_by_data (GPtrArray *array,
+                                          void      *data)
+{
+  for (guint i = 0; i < array->len; ++i) {
+    GObject *object = g_ptr_array_index (array, i);
+
+    g_signal_handlers_disconnect_by_data (object, data);
+  }
+}
+
+static void
+maybe_disconnect_object_by_data (void *object,
+                                 void *data)
+{
+  if (!G_IS_OBJECT (object))
+    return;
+
+  g_signal_handlers_disconnect_by_data (object, data);
+}
+
+static void
 stop_profile_drivers (PpdApp *data)
 {
   if (data->logind_sleep_signal_id) {
@@ -1247,13 +1268,18 @@ stop_profile_drivers (PpdApp *data)
   upower_battery_set_power_changed_reason (data, PPD_POWER_CHANGED_REASON_UNKNOWN);
   release_all_profile_holds (data);
   g_cancellable_cancel (data->cancellable);
+  disconnect_array_objects_signals_by_data (data->probed_drivers, data);
   g_ptr_array_set_size (data->probed_drivers, 0);
+  disconnect_array_objects_signals_by_data (data->actions, data);
   g_ptr_array_set_size (data->actions, 0);
   g_clear_signal_handler (&data->upower_watch_id, data->upower_proxy);
   g_clear_signal_handler (&data->upower_properties_id, data->upower_proxy);
   g_clear_object (&data->cancellable);
+  maybe_disconnect_object_by_data (data->upower_proxy, data);
   g_clear_object (&data->upower_proxy);
+  maybe_disconnect_object_by_data (data->cpu_driver, data);
   g_clear_object (&data->cpu_driver);
+  maybe_disconnect_object_by_data (data->platform_driver, data);
   g_clear_object (&data->platform_driver);
 }
 

@@ -292,6 +292,6 @@ ppd_action_amdgpu_panel_power_init (PpdActionAmdgpuPanelPower *self)
   const gchar * const subsystem[] = { "drm", NULL };
 
   self->client = g_udev_client_new (subsystem);
-  g_signal_connect (G_OBJECT (self->client), "uevent",
-                    G_CALLBACK (udev_uevent_cb), self);
+  g_signal_connect_object (G_OBJECT (self->client), "uevent",
+                           G_CALLBACK (udev_uevent_cb), self, 0);
 }

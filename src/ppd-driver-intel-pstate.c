@@ -264,8 +264,8 @@ ppd_driver_intel_pstate_probe (PpdDriver  *driver)
     pstate->no_turbo_path = ppd_utils_get_sysfs_path (NO_TURBO_PATH);
     pstate->no_turbo_mon = monitor_no_turbo_prop (pstate->no_turbo_path);
     if (pstate->no_turbo_mon) {
-      g_signal_connect (G_OBJECT (pstate->no_turbo_mon), "changed",
-                        G_CALLBACK (no_turbo_changed), pstate);
+      g_signal_connect_object (G_OBJECT (pstate->no_turbo_mon), "changed",
+                               G_CALLBACK (no_turbo_changed), pstate, 0);
     }
     update_no_turbo (pstate);
   }

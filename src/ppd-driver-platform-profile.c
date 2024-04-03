@@ -31,7 +31,7 @@ struct _PpdDriverPlatformProfile
   gboolean has_low_power;
   GFileMonitor *lapmode_mon;
   GFileMonitor *acpi_platform_profile_mon;
-  guint acpi_platform_profile_changed_id;
+  gulong acpi_platform_profile_changed_id;
 };
 
 G_DEFINE_TYPE (PpdDriverPlatformProfile, ppd_driver_platform_profile, PPD_TYPE_DRIVER_PLATFORM)
@@ -329,8 +329,8 @@ ppd_driver_platform_profile_probe (PpdDriver  *driver)
   self->lapmode_mon = ppd_utils_monitor_sysfs_attr (self->device,
                                                     LAPMODE_SYSFS_NAME,
                                                     NULL);
-  g_signal_connect (G_OBJECT (self->lapmode_mon), "changed",
-                    G_CALLBACK (lapmode_changed), self);
+  g_signal_connect_object (G_OBJECT (self->lapmode_mon), "changed",
+                           G_CALLBACK (lapmode_changed), self, 0);
   update_dytc_lapmode_state (self);
 
 out:
@@ -347,6 +347,8 @@ ppd_driver_platform_profile_finalize (GObject *object)
   PpdDriverPlatformProfile *driver;
 
   driver = PPD_DRIVER_PLATFORM_PROFILE (object);
+  g_clear_signal_handler (&driver->acpi_platform_profile_changed_id,
+                          driver->acpi_platform_profile_mon);
   g_clear_pointer (&driver->profile_choices, g_strfreev);
   g_clear_object (&driver->device);
   g_clear_object (&driver->lapmode_mon);
