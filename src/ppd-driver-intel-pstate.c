@@ -358,9 +358,9 @@ apply_pref_to_devices (PpdDriver   *driver,
 }
 
 static gboolean
-ppd_driver_intel_pstate_power_changed (PpdDriver             *driver,
-                                     PpdPowerChangedReason  reason,
-                                     GError               **error)
+ppd_driver_intel_pstate_power_changed (PpdDriver              *driver,
+                                       PpdPowerChangedReason   reason,
+                                       GError                **error)
 {
   PpdDriverIntelPstate *pstate = PPD_DRIVER_INTEL_PSTATE (driver);
 
