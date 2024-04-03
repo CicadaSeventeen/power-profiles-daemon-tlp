@@ -57,13 +57,11 @@ pre_commit:
   script:
     - pre-commit run --all-files
 
-build_stable:
+build_and_test:
   variables:
     JOB_DEPS: $TEST_DEPENDENCIES
               gcovr
-              argparse-manpage
               python3-coverage
-              python3-shtab
     JOB_DEBUG_DEPS: $TEST_DEBUG_DEPENDENCIES
   extends:
     - .install-deps
@@ -73,7 +71,6 @@ build_stable:
         --fatal-meson-warnings
         --warnlevel 2
         -Dpylint=enabled
-        -Dmanpage=enabled
         -Db_coverage=true
         _build
     - meson test -C _build --print-errorlogs
@@ -89,9 +86,6 @@ build_stable:
     - coverage3 html --data-file=$python_coverage_data
         -d _build/meson-logs/python-coverage-html
     - cat _build/meson-logs/coverage.txt || true
-    - meson install -C _build
-    - ninja -C _build uninstall -v
-    - meson dist -C _build
   artifacts:
     when: always
     paths:
@@ -107,6 +101,32 @@ build_stable:
         coverage_format: cobertura
         path: _build/meson-logs/*coverage.xml
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
+
+dist_install:
+  variables:
+    JOB_DEPS: argparse-manpage
+              bash-completion-devel
+              python3-gobject
+              python3-shtab
+  extends:
+    - .install-deps
+  script:
+    - meson setup
+        --werror
+        --fatal-meson-warnings
+        --warnlevel 2
+        -Dmanpage=enabled
+        -Dbashcomp=enabled
+        -Dzshcomp=enabled
+        -Dtests=false
+        _build
+    - meson install -C _build
+    - ninja -C _build uninstall -v
+    - meson dist -C _build
+  artifacts:
+    when: always
+    paths:
+    - _build/meson-logs/*.txt
 
 address_sanitizer:
   variables:
@@ -182,7 +202,7 @@ pages:
   image: alpine:latest
   stage: deploy
   needs:
-    - job: build_stable
+    - job: build_and_test
       artifacts: true
     - job: docs
       artifacts: true
