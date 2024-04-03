@@ -30,8 +30,8 @@ struct _PpdDriverIntelPstate
   PpdDriverCpu  parent_instance;
 
   PpdProfile activated_profile;
-  GList *epp_devices; /* GList of paths */
-  GList *epb_devices; /* GList of paths */
+  GPtrArray *epp_devices; /* Array of paths */
+  GPtrArray *epb_devices; /* Array of paths */
   GFileMonitor *no_turbo_mon;
   char *no_turbo_path;
   gboolean on_battery;
@@ -180,7 +180,10 @@ probe_epb (PpdDriverIntelPstate *pstate)
     if (!g_file_test (path, G_FILE_TEST_EXISTS))
       continue;
 
-    pstate->epb_devices = g_list_prepend (pstate->epb_devices, g_steal_pointer (&path));
+    if (!pstate->epb_devices)
+      pstate->epb_devices = g_ptr_array_new_with_free_func (g_free);
+
+    g_ptr_array_add (pstate->epb_devices, g_steal_pointer (&path));
     ret = PPD_PROBE_RESULT_SUCCESS;
   }
 
@@ -236,7 +239,10 @@ probe_epp (PpdDriverIntelPstate *pstate)
       continue;
     }
 
-    pstate->epp_devices = g_list_prepend (pstate->epp_devices, g_steal_pointer (&path));
+    if (!pstate->epp_devices)
+      pstate->epp_devices = g_ptr_array_new_with_free_func (g_free);
+
+    g_ptr_array_add (pstate->epp_devices, g_steal_pointer (&path));
     ret = PPD_PROBE_RESULT_SUCCESS;
   }
 
@@ -323,23 +329,24 @@ apply_pref_to_devices (PpdDriver   *driver,
                        GError     **error)
 {
   PpdDriverIntelPstate *pstate = PPD_DRIVER_INTEL_PSTATE (driver);
-  GList *l;
-
-  g_return_val_if_fail (pstate->epp_devices != NULL ||
-                        pstate->epb_devices, FALSE);
 
   if (profile == PPD_PROFILE_UNSET)
     return TRUE;
 
-  for (l = pstate->epp_devices; l != NULL; l = l->next) {
-    const char *path = l->data;
+  g_return_val_if_fail (pstate->epp_devices != NULL ||
+                        pstate->epb_devices != NULL, FALSE);
+  g_return_val_if_fail ((pstate->epp_devices && pstate->epp_devices->len != 0) ||
+                        (pstate->epb_devices && pstate->epb_devices->len != 0), FALSE);
+
+  for (guint i = 0; pstate->epp_devices && i < pstate->epp_devices->len; i++) {
+    const char *path = g_ptr_array_index (pstate->epp_devices, i);
 
     if (!ppd_utils_write (path, profile_to_epp_pref (profile, pstate->on_battery), error))
       return FALSE;
   }
 
-  for (l = pstate->epb_devices; l != NULL; l = l->next) {
-    const char *path = l->data;
+  for (guint i = 0; pstate->epb_devices && i < pstate->epb_devices->len; i++) {
+    const char *path = g_ptr_array_index (pstate->epb_devices, i);
 
     if (!ppd_utils_write (path, profile_to_epb_pref (profile, pstate->on_battery), error))
       return FALSE;
@@ -390,8 +397,8 @@ ppd_driver_intel_pstate_finalize (GObject *object)
 
   driver = PPD_DRIVER_INTEL_PSTATE (object);
 
-  g_clear_list (&driver->epp_devices, g_free);
-  g_clear_list (&driver->epb_devices, g_free);
+  g_clear_pointer (&driver->epp_devices, g_ptr_array_unref);
+  g_clear_pointer (&driver->epb_devices, g_ptr_array_unref);
   g_clear_pointer (&driver->no_turbo_path, g_free);
   g_clear_object (&driver->no_turbo_mon);
   G_OBJECT_CLASS (ppd_driver_intel_pstate_parent_class)->finalize (object);

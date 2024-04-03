@@ -37,7 +37,7 @@ struct _PpdDriverAmdPstate
   PpdDriverCpu  parent_instance;
 
   PpdProfile activated_profile;
-  GList *epp_devices; /* GList of paths */
+  GPtrArray *epp_devices; /* Array of paths */
   gboolean on_battery;
 };
 
@@ -127,7 +127,10 @@ probe_epp (PpdDriverAmdPstate *pstate)
     if (!g_file_test (path, G_FILE_TEST_EXISTS))
       continue;
 
-    pstate->epp_devices = g_list_prepend (pstate->epp_devices, g_steal_pointer (&base));
+    if (!pstate->epp_devices)
+      pstate->epp_devices = g_ptr_array_new_with_free_func (g_free);
+
+    g_ptr_array_add (pstate->epp_devices, g_steal_pointer (&base));
     ret = PPD_PROBE_RESULT_SUCCESS;
   }
 
@@ -184,19 +187,18 @@ profile_to_epp_pref (PpdProfile profile, gboolean battery)
 }
 
 static gboolean
-apply_pref_to_devices (GList       *devices,
+apply_pref_to_devices (GPtrArray   *devices,
                        PpdProfile   profile,
                        gboolean     battery,
                        GError     **error)
 {
   gboolean ret = TRUE;
-  GList *l;
 
   if (profile == PPD_PROFILE_UNSET)
     return TRUE;
 
-  for (l = devices; l != NULL; l = l->next) {
-    const char *base = l->data;
+  for (guint i = 0; i < devices->len; ++i) {
+    const char *base = g_ptr_array_index (devices, i);
     g_autofree char *epp = NULL;
     g_autofree char *gov = NULL;
 
@@ -230,6 +232,7 @@ ppd_driver_amd_pstate_activate_profile (PpdDriver                    *driver,
   gboolean ret = FALSE;
 
   g_return_val_if_fail (pstate->epp_devices != NULL, FALSE);
+  g_return_val_if_fail (pstate->epp_devices->len != 0, FALSE);
 
   ret = apply_pref_to_devices (pstate->epp_devices, profile, pstate->on_battery, error);
   if (!ret && pstate->activated_profile != PPD_PROFILE_UNSET) {
@@ -280,7 +283,7 @@ ppd_driver_amd_pstate_finalize (GObject *object)
   PpdDriverAmdPstate *driver;
 
   driver = PPD_DRIVER_AMD_PSTATE (object);
-  g_clear_list (&driver->epp_devices, g_free);
+  g_clear_pointer (&driver->epp_devices, g_ptr_array_unref);
   G_OBJECT_CLASS (ppd_driver_amd_pstate_parent_class)->finalize (object);
 }
 
