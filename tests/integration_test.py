@@ -1412,7 +1412,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 
-        _, upowerd_obj, _ = self.start_dbus_template(
+        _, upowerd_obj, stop_upowerd = self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
         )
@@ -1430,6 +1430,24 @@ class Tests(dbusmock.DBusTestCase):
 
         upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", False)
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
+        self.stop_daemon()
+
+        # start upower after the daemon
+        stop_upowerd()
+
+        self.start_daemon()
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
+        _, upowerd_obj, _ = self.start_dbus_template(
+            "upower",
+            {"DaemonVersion": "0.99", "OnBattery": False},
+        )
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
+        upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", True)
+        self.assert_file_eventually_contains(energy_prefs, "balance_power")
 
     def test_amdgpu_panel_power(self):
         """Verify AMDGPU Panel power actions"""
@@ -2097,7 +2115,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 
-        _, upowerd_obj, _ = self.start_dbus_template(
+        _, upowerd_obj, stop_upowerd = self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
         )
@@ -2109,6 +2127,24 @@ class Tests(dbusmock.DBusTestCase):
 
         upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", False)
         self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
+        self.stop_daemon()
+
+        # start upower after the daemon
+        stop_upowerd()
+
+        self.start_daemon()
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
+        _, upowerd_obj, _ = self.start_dbus_template(
+            "upower",
+            {"DaemonVersion": "0.99", "OnBattery": False},
+        )
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+
+        upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", True)
+        self.assert_file_eventually_contains(energy_prefs, "balance_power")
 
     def test_intel_pstate_noturbo(self):
         """Intel P-State driver (balance)"""
