@@ -467,7 +467,7 @@ activate_target_profile (PpdApp                      *data,
 {
   PpdProfile current_profile = data->active_profile;
 
-  g_debug ("Setting active profile '%s' for reason '%s' (current: '%s')",
+  g_info ("Setting active profile '%s' for reason '%s' (current: '%s')",
            ppd_profile_to_str (target_profile),
            ppd_profile_activation_reason_to_str (reason),
            ppd_profile_to_str (current_profile));
@@ -1053,7 +1053,7 @@ upower_battery_set_power_changed_reason (PpdApp                *data,
     return;
 
   data->power_changed_reason = reason;
-  g_debug ("Power Changed because of reason %d", reason);
+  g_info ("Power Changed because of reason %d", reason);
 
   for (guint i = 0; i < data->actions->len; i++) {
     g_autoptr(GError) error = NULL;
@@ -1340,6 +1340,7 @@ start_profile_drivers (PpdApp *data)
 
       if (PPD_DRIVER_GET_CLASS (driver)->prepare_to_sleep != NULL)
         needs_suspend_monitor = TRUE;
+      g_info ("Driver '%s' loaded", ppd_driver_get_driver_name (driver));
 
       g_signal_connect (G_OBJECT (driver), "notify::performance-degraded",
                         G_CALLBACK (driver_performance_degraded_changed_cb), data);
@@ -1367,6 +1368,7 @@ start_profile_drivers (PpdApp *data)
       if (PPD_ACTION_GET_CLASS (action)->power_changed != NULL)
         needs_battery_monitor = TRUE;
 
+      g_info ("Action '%s' loaded", ppd_action_get_action_name (action));
       g_ptr_array_add (data->actions, g_steal_pointer (&action));
       continue;
     }
