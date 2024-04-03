@@ -21,7 +21,7 @@ variables:
                            glibc
                            libgudev
                            upower
-                           polkit-gnome
+                           polkit-libs
 
 workflow:
   rules:
