@@ -976,7 +976,7 @@ name_lost_handler (GDBusConnection *connection,
 
   g_warning ("power-profiles-daemon is already running, or it cannot own its D-Bus name. Verify installation.");
   if (!app->was_started)
-    app->ret = 1;
+    app->ret = EXIT_FAILURE;
 
   g_main_loop_quit (app->main_loop);
 }
@@ -1750,7 +1750,7 @@ int main (int argc, char **argv)
   /* Set up D-Bus */
   if (!setup_dbus (data, debug_options->replace, &error)) {
     g_error ("Failed to start dbus: %s", error->message);
-    return 1;
+    return EXIT_FAILURE;
   }
 
   g_main_loop_run (data->main_loop);
