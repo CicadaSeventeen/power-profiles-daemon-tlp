@@ -73,7 +73,7 @@ python3 = python.find_installation('python3')
 have_shtab = run_command(
   [python3, '-c', 'import shtab'], check: false).returncode() == 0
 if not have_shtab
-  warning('''python3-shtab not found''')
+  message('''python3-shtab not found, completions won't be generated''')
 endif
 
 bashcomp = dependency('bash-completion', required: get_option('bashcomp').disable_auto_if(not have_shtab))
