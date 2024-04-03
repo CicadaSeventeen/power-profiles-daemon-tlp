@@ -110,7 +110,7 @@ foreach p : python3_required_modules
   if run_command(python3, '-c', script, check: false).returncode() == 0
     message('Python3 module \'@0@\' found: YES'.format(p))
   else
-    error('Python3 module \'@0@\' required for running tests but not found'.format(p))
+    error('Python3 module \'@0@\' required but not found'.format(p))
   endif
 endforeach
 
@@ -119,7 +119,7 @@ foreach module, version : gi_required_modules
   if run_command(python3, '-c', script, check: false).returncode() == 0
     message('Python3 module \'@0@\' found: YES @1@'.format(module, version))
   else
-    error('''GObject Introspection module '@0@' version @1@ required for running tests but not found'''.format(
+    error('''GObject Introspection module '@0@' version @1@ required but not found'''.format(
       module, version))
   endif
 endforeach
