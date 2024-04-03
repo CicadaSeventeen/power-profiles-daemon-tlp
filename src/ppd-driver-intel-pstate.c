@@ -94,7 +94,8 @@ no_turbo_changed (GFileMonitor     *monitor,
 
   g_return_if_fail (event_type != G_FILE_MONITOR_EVENT_DELETED);
 
-  update_no_turbo (pstate);
+  if (event_type == G_FILE_MONITOR_EVENT_CHANGES_DONE_HINT)
+    update_no_turbo (pstate);
 }
 
 static GFileMonitor *
