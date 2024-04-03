@@ -193,9 +193,14 @@ apply_pref_to_devices (GPtrArray   *devices,
                        GError     **error)
 {
   gboolean ret = TRUE;
+  const char *epp_pref;
+  const char *gov_pref;
 
   if (profile == PPD_PROFILE_UNSET)
     return TRUE;
+
+  epp_pref = profile_to_epp_pref (profile, battery);
+  gov_pref = profile_to_gov_pref (profile);
 
   for (guint i = 0; i < devices->len; ++i) {
     const char *base = g_ptr_array_index (devices, i);
@@ -206,7 +211,7 @@ apply_pref_to_devices (GPtrArray   *devices,
                             "scaling_governor",
                             NULL);
 
-    ret = ppd_utils_write (gov, profile_to_gov_pref (profile), error);
+    ret = ppd_utils_write (gov, gov_pref, error);
     if (!ret)
       break;
 
@@ -214,7 +219,7 @@ apply_pref_to_devices (GPtrArray   *devices,
                             "energy_performance_preference",
                             NULL);
 
-    ret = ppd_utils_write (epp, profile_to_epp_pref (profile, battery), error);
+    ret = ppd_utils_write (epp, epp_pref, error);
     if (!ret)
       break;
   }
