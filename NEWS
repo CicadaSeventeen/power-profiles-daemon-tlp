@@ -1,3 +1,25 @@
+0.21
+----
+
+Since this release power-profiles-daemon is battery-state aware and some drivers
+use a more power efficient state when using the balanced profile on battery.
+In particular both the AMD and Intel P-State drivers will use the
+balance_power EPP profile, while for Intel one we also set the energy
+performance bias to 8 (instead of 6).
+
+This release also contains various fixes for the powerprofilesctl command line
+tool when using the launch or version commands.
+The tool is now better documented as we generate a manual page for it (if
+python3-argparse is installed) and bash completions. We're even generating the
+ZSH completions, but the install path must be provided.
+
+The daemon command line interface has been improved for debugging, so use
+--help-debug for further information.
+
+The systemd service lockdown settings have been restricted even more.
+
+Various code optimizations.
+
 0.20
 ----
 
