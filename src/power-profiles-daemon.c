@@ -466,12 +466,10 @@ actions_activate_profile (GPtrArray *actions,
   for (i = 0; i < actions->len; i++) {
     g_autoptr(GError) error = NULL;
     PpdAction *action;
-    gboolean ret;
 
     action = g_ptr_array_index (actions, i);
 
-    ret = ppd_action_activate_profile (action, profile, &error);
-    if (!ret)
+    if (!ppd_action_activate_profile (action, profile, &error))
       g_warning ("Failed to activate action '%s' to profile %s: %s",
                  ppd_profile_to_str (profile),
                  ppd_action_get_action_name (action),

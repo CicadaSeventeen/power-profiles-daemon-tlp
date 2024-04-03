@@ -160,13 +160,12 @@ probe_epb (PpdDriverIntelPstate *pstate)
   g_autoptr(GDir) dir = NULL;
   g_autofree char *policy_dir = NULL;
   const char *dirname;
-  PpdProbeResult ret = PPD_PROBE_RESULT_FAIL;
 
   policy_dir = ppd_utils_get_sysfs_path (CPU_DIR);
   dir = g_dir_open (policy_dir, 0, NULL);
   if (!dir) {
     g_debug ("Could not open %s", CPU_DIR);
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   }
 
   while ((dirname = g_dir_read_name (dir)) != NULL) {
@@ -184,10 +183,12 @@ probe_epb (PpdDriverIntelPstate *pstate)
       pstate->epb_devices = g_ptr_array_new_with_free_func (g_free);
 
     g_ptr_array_add (pstate->epb_devices, g_steal_pointer (&path));
-    ret = PPD_PROBE_RESULT_SUCCESS;
   }
 
-  return ret;
+  if (pstate->epb_devices && pstate->epb_devices->len)
+    return PPD_PROBE_RESULT_SUCCESS;
+
+  return PPD_PROBE_RESULT_FAIL;
 }
 
 static PpdProbeResult
@@ -198,23 +199,22 @@ probe_epp (PpdDriverIntelPstate *pstate)
   g_autofree char *pstate_status_path = NULL;
   g_autofree char *status = NULL;
   const char *dirname;
-  PpdProbeResult ret = PPD_PROBE_RESULT_FAIL;
 
   /* Verify that Intel P-State is running in active mode */
   pstate_status_path = ppd_utils_get_sysfs_path (PSTATE_STATUS_PATH);
   if (!g_file_get_contents (pstate_status_path, &status, NULL, NULL))
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   status = g_strchomp (status);
   if (g_strcmp0 (status, "active") != 0) {
     g_debug ("Intel P-State is running in passive mode");
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   }
 
   policy_dir = ppd_utils_get_sysfs_path (CPUFREQ_POLICY_DIR);
   dir = g_dir_open (policy_dir, 0, NULL);
   if (!dir) {
     g_debug ("Could not open %s", policy_dir);
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   }
 
   while ((dirname = g_dir_read_name (dir)) != NULL) {
@@ -243,10 +243,12 @@ probe_epp (PpdDriverIntelPstate *pstate)
       pstate->epp_devices = g_ptr_array_new_with_free_func (g_free);
 
     g_ptr_array_add (pstate->epp_devices, g_steal_pointer (&path));
-    ret = PPD_PROBE_RESULT_SUCCESS;
   }
 
-  return ret;
+  if (pstate->epp_devices && pstate->epp_devices->len)
+    return PPD_PROBE_RESULT_SUCCESS;
+
+  return PPD_PROBE_RESULT_FAIL;
 }
 
 static PpdProbeResult

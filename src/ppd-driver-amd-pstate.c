@@ -77,29 +77,28 @@ probe_epp (PpdDriverAmdPstate *pstate)
   g_autofree char *pm_profile_str = NULL;
   guint64 pm_profile;
   const char *dirname;
-  PpdProbeResult ret = PPD_PROBE_RESULT_FAIL;
 
   /* Verify that AMD P-State is running in active mode */
   pstate_status_path = ppd_utils_get_sysfs_path (PSTATE_STATUS_PATH);
   if (!g_file_get_contents (pstate_status_path, &status, NULL, NULL))
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   status = g_strchomp (status);
   if (g_strcmp0 (status, "active") != 0) {
     g_debug ("AMD P-State is not running in active mode");
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   }
 
   policy_dir = ppd_utils_get_sysfs_path (CPUFREQ_POLICY_DIR);
   dir = g_dir_open (policy_dir, 0, NULL);
   if (!dir) {
     g_debug ("Could not open %s", policy_dir);
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   }
 
   /* only run on things that we know aren't servers */
   pm_profile_path = ppd_utils_get_sysfs_path (ACPI_PM_PROFILE);
   if (!g_file_get_contents (pm_profile_path, &pm_profile_str, NULL, NULL))
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   pm_profile = g_ascii_strtoull (pm_profile_str, NULL, 10);
   switch (pm_profile) {
   case PM_UNSPECIFIED:
@@ -107,7 +106,7 @@ probe_epp (PpdDriverAmdPstate *pstate)
   case PM_SOHO_SERVER:
   case PM_PERFORMANCE_SERVER:
     g_debug ("AMD-P-State not supported on PM profile %" G_GUINT64_FORMAT, pm_profile);
-    return ret;
+    return PPD_PROBE_RESULT_FAIL;
   default:
     break;
   }
@@ -131,24 +130,22 @@ probe_epp (PpdDriverAmdPstate *pstate)
       pstate->epp_devices = g_ptr_array_new_with_free_func (g_free);
 
     g_ptr_array_add (pstate->epp_devices, g_steal_pointer (&base));
-    ret = PPD_PROBE_RESULT_SUCCESS;
   }
 
-  return ret;
+  if (pstate->epp_devices && pstate->epp_devices->len)
+    return PPD_PROBE_RESULT_SUCCESS;
+
+  return PPD_PROBE_RESULT_FAIL;
 }
 
 static PpdProbeResult
 ppd_driver_amd_pstate_probe (PpdDriver  *driver)
 {
   PpdDriverAmdPstate *pstate = PPD_DRIVER_AMD_PSTATE (driver);
-  PpdProbeResult ret = PPD_PROBE_RESULT_FAIL;
+  PpdProbeResult ret;
 
   ret = probe_epp (pstate);
 
-  if (ret != PPD_PROBE_RESULT_SUCCESS)
-    goto out;
-
-out:
   g_debug ("%s p-state settings",
            ret == PPD_PROBE_RESULT_SUCCESS ? "Found" : "Didn't find");
   return ret;
@@ -192,7 +189,6 @@ apply_pref_to_devices (GPtrArray   *devices,
                        gboolean     battery,
                        GError     **error)
 {
-  gboolean ret = TRUE;
   const char *epp_pref;
   const char *gov_pref;
 
@@ -211,20 +207,18 @@ apply_pref_to_devices (GPtrArray   *devices,
                             "scaling_governor",
                             NULL);
 
-    ret = ppd_utils_write (gov, gov_pref, error);
-    if (!ret)
-      break;
+    if (!ppd_utils_write (gov, gov_pref, error))
+      return FALSE;
 
     epp = g_build_filename (base,
                             "energy_performance_preference",
                             NULL);
 
-    ret = ppd_utils_write (epp, epp_pref, error);
-    if (!ret)
-      break;
+    if (!ppd_utils_write (epp, epp_pref, error))
+      return FALSE;
   }
 
-  return ret;
+  return TRUE;
 }
 
 static gboolean
