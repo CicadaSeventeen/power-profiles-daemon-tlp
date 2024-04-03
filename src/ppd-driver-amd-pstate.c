@@ -231,18 +231,16 @@ ppd_driver_amd_pstate_activate_profile (PpdDriver                    *driver,
 
   g_return_val_if_fail (pstate->epp_devices != NULL, FALSE);
 
-  if (pstate->epp_devices) {
-    ret = apply_pref_to_devices (pstate->epp_devices, profile, pstate->on_battery, error);
-    if (!ret && pstate->activated_profile != PPD_PROFILE_UNSET) {
-      g_autoptr(GError) error_local = NULL;
-      /* reset back to previous */
-      if (!apply_pref_to_devices (pstate->epp_devices,
-                                  pstate->activated_profile,
-                                  pstate->on_battery,
-                                  &error_local))
-        g_warning ("failed to restore previous profile: %s", error_local->message);
-      return ret;
-    }
+  ret = apply_pref_to_devices (pstate->epp_devices, profile, pstate->on_battery, error);
+  if (!ret && pstate->activated_profile != PPD_PROFILE_UNSET) {
+    g_autoptr(GError) error_local = NULL;
+    /* reset back to previous */
+    if (!apply_pref_to_devices (pstate->epp_devices,
+                                pstate->activated_profile,
+                                pstate->on_battery,
+                                &error_local))
+      g_warning ("failed to restore previous profile: %s", error_local->message);
+    return ret;
   }
 
   if (ret)
