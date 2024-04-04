@@ -731,6 +731,51 @@ class Tests(dbusmock.DBusTestCase):
             os.path.join(dir1, "energy_performance_preference"), "balance_performance"
         )
 
+    def test_intel_pstate_reapply_on_resume_from_sleep_disable_logind(self):
+        # Create CPU with preference
+        dir1 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy0/"
+        )
+        os.makedirs(dir1)
+        gov_path = os.path.join(dir1, "scaling_governor")
+        self.write_file_contents(gov_path, "performance\n")
+        energy_prefs = os.path.join(dir1, "energy_performance_preference")
+        self.write_file_contents(energy_prefs, "performance\n")
+        pstate_dir = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/intel_pstate"
+        )
+        os.makedirs(pstate_dir)
+        self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
+
+        _, obj_logind, _ = self.start_dbus_template("logind", {})
+
+        self.start_daemon(["--disable-logind"])
+        self.assert_dbus_property_eventually_is(
+            "ActiveProfile", "balanced", keep_checking=100
+        )
+
+        # Simulate system changing to performance mode just before going to suspend
+        self.write_file_contents(energy_prefs, "performance\n")
+        self.assert_file_eventually_contains(
+            energy_prefs, "performance\n", keep_checking=500
+        )
+
+        obj_logind.EmitSignal(
+            "org.freedesktop.login1.Manager", "PrepareForSleep", "b", [True]
+        )
+        self.assert_file_eventually_contains(
+            energy_prefs, "performance\n", keep_checking=500
+        )
+
+        # Check that on resume the value stays.
+        obj_logind.EmitSignal(
+            "org.freedesktop.login1.Manager", "PrepareForSleep", "b", [False]
+        )
+
+        self.assert_file_eventually_contains(
+            energy_prefs, "performance\n", timeout=3000, keep_checking=100
+        )
+
     def test_intel_pstate_reapply_on_resume_from_sleep(self):
         # Create CPU with preference
         dir1 = os.path.join(
@@ -2241,6 +2286,47 @@ class Tests(dbusmock.DBusTestCase):
         """Checks that the version property is advertised"""
         self.start_daemon()
         self.assertTrue(self.get_dbus_property("Version"))
+
+    def test_intel_pstate_disabled_upower(self):
+        # Create CPU with preference
+        dir1 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy0/"
+        )
+        os.makedirs(dir1)
+        self.write_file_contents(os.path.join(dir1, "scaling_governor"), "powersave\n")
+        self.write_file_contents(
+            os.path.join(dir1, "energy_performance_preference"), "performance\n"
+        )
+
+        # Create Intel P-State configuration
+        pstate_dir = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/intel_pstate"
+        )
+        os.makedirs(pstate_dir)
+        self.write_file_contents(os.path.join(pstate_dir, "no_turbo"), "1\n")
+        self.write_file_contents(os.path.join(pstate_dir, "turbo_pct"), "0\n")
+        self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
+
+        _, _, stop_upowerd = self.start_dbus_template(
+            "upower",
+            {"DaemonVersion": "0.99", "OnBattery": False},
+        )
+
+        self.start_daemon(["--disable-upower"])
+
+        profiles = self.get_dbus_property("Profiles")
+        self.assertEqual(len(profiles), 3)
+        self.assertEqual(self.get_dbus_property("PerformanceDegraded"), "")
+
+        energy_prefs = os.path.join(dir1, "energy_performance_preference")
+        scaling_governor = os.path.join(dir1, "scaling_governor")
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+        self.assert_file_eventually_contains(scaling_governor, "powersave")
+
+        stop_upowerd()
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 
     def test_intel_pstate_upower(self):
         # Create CPU with preference

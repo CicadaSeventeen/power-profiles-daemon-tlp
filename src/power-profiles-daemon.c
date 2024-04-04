@@ -58,6 +58,8 @@ typedef struct {
   GOptionGroup *group;
   GLogLevelFlags log_level;
   gboolean replace;
+  gboolean disable_upower;
+  gboolean disable_logind;
   GStrv blocked_drivers;
   GStrv blocked_actions;
 } DebugOptions;
@@ -1537,7 +1539,9 @@ start_profile_drivers (PpdApp *data)
   send_dbus_event (data, PROP_ALL);
   data->was_started = TRUE;
 
-  if (needs_battery_monitor) {
+  if (data->debug_options->disable_upower) {
+    g_debug ("upower is disabled, let's skip it");
+  } else if (needs_battery_monitor) {
     /* start watching for power changes */
     g_debug ("Battery state monitor required, connecting to upower...");
     g_dbus_proxy_new (data->connection,
@@ -1564,7 +1568,9 @@ start_profile_drivers (PpdApp *data)
     g_debug ("No battery state monitor required by any driver, let's skip it");
   }
 
-  if (needs_suspend_monitor) {
+  if (data->debug_options->disable_logind) {
+    g_debug ("logind is disabled, let's skip it");
+  } else if (needs_suspend_monitor) {
     g_debug ("Suspension state monitor required, monitoring logind...");
     data->logind_sleep_signal_id =
       g_dbus_connection_signal_subscribe (data->connection,
@@ -1641,7 +1647,7 @@ setup_dbus (PpdApp    *data,
   own_data->legacy_interface = g_dbus_interface_info_ref (legacy_introspection_data->interfaces[0]);
 
   own_data->flags = G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT;
-  if (replace)
+  if (data->debug_options->replace)
     own_data->flags |= G_BUS_NAME_OWNER_FLAGS_REPLACE;
 
   data->name_id = g_bus_own_name (G_BUS_TYPE_SYSTEM,
@@ -1814,6 +1820,24 @@ debug_pre_parse_hook (GOptionContext *context,
       G_OPTION_ARG_STRING_ARRAY,
       &data->blocked_actions,
       "Block action(s) from loading",
+      NULL,
+    },
+    {
+      "disable-upower",
+      0,
+      G_OPTION_FLAG_NONE,
+      G_OPTION_ARG_NONE,
+      &data->disable_upower,
+      "Disable upower integration",
+      NULL,
+    },
+    {
+      "disable-logind",
+      0,
+      G_OPTION_FLAG_NONE,
+      G_OPTION_ARG_NONE,
+      &data->disable_logind,
+      "Disable logind integration",
       NULL,
     },
     { NULL }
