@@ -94,8 +94,7 @@ typedef struct {
 
   guint logind_sleep_signal_id;
 
-  GStrv blocked_drivers;
-  GStrv blocked_actions;
+  DebugOptions *debug_options;
 } PpdApp;
 
 typedef struct {
@@ -1389,10 +1388,10 @@ action_blocked (PpdApp *app, PpdAction *action)
   const gchar *action_name = ppd_action_get_action_name (action);
   gboolean blocked;
 
-  if (app->blocked_actions == NULL || g_strv_length (app->blocked_actions) == 0)
+  if (app->debug_options->blocked_actions == NULL || g_strv_length (app->debug_options->blocked_actions) == 0)
     return FALSE;
 
-  blocked = g_strv_contains ((const gchar *const *) app->blocked_actions, action_name);
+  blocked = g_strv_contains ((const gchar *const *) app->debug_options->blocked_actions, action_name);
 
   if (blocked)
     g_debug ("Action '%s' is blocked", action_name);
@@ -1405,10 +1404,10 @@ driver_blocked (PpdApp *app, PpdDriver *driver)
   const gchar *driver_name = ppd_driver_get_driver_name (driver);
   gboolean blocked;
 
-  if (app->blocked_drivers == NULL || g_strv_length (app->blocked_drivers) == 0)
+  if (app->debug_options->blocked_drivers == NULL || g_strv_length (app->debug_options->blocked_drivers) == 0)
     return FALSE;
 
-  blocked = g_strv_contains ((const gchar *const *) app->blocked_drivers, driver_name);
+  blocked = g_strv_contains ((const gchar *const *) app->debug_options->blocked_drivers, driver_name);
   if (blocked)
     g_debug ("Driver '%s' is blocked", driver_name);
   return blocked;
@@ -1604,7 +1603,6 @@ name_acquired_handler (GDBusConnection *connection,
 
 static gboolean
 setup_dbus (PpdApp    *data,
-            gboolean   replace,
             GError   **error)
 {
   g_autoptr(GBytes) iface_data = NULL;
@@ -1669,8 +1667,7 @@ free_app_data (PpdApp *data)
   g_clear_handle_id (&data->name_id, g_bus_unown_name);
   g_clear_handle_id (&data->legacy_name_id, g_bus_unown_name);
 
-  g_strfreev (data->blocked_drivers);
-  g_strfreev (data->blocked_actions);
+  g_clear_pointer (&data->debug_options, debug_options_free);
   g_clear_pointer (&data->config_path, g_free);
   g_clear_pointer (&data->config, g_key_file_unref);
   g_clear_pointer (&data->probed_drivers, g_ptr_array_unref);
@@ -1873,8 +1870,7 @@ int main (int argc, char **argv)
   data->profile_holds = g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, (GDestroyNotify) profile_hold_free);
   data->active_profile = PPD_PROFILE_BALANCED;
   data->selected_profile = PPD_PROFILE_BALANCED;
-  data->blocked_drivers = g_steal_pointer (&debug_options->blocked_drivers);
-  data->blocked_actions = g_steal_pointer (&debug_options->blocked_actions);
+  data->debug_options = g_steal_pointer(&debug_options);
 
   g_unix_signal_add (SIGTERM, quit_signal_callback, data);
   g_unix_signal_add (SIGINT, quit_signal_callback, data);
@@ -1885,7 +1881,7 @@ int main (int argc, char **argv)
   ppd_app = data;
 
   /* Set up D-Bus */
-  if (!setup_dbus (data, debug_options->replace, &error)) {
+  if (!setup_dbus (data, &error)) {
     g_error ("Failed to start dbus: %s", error->message);
     return EXIT_FAILURE;
   }
