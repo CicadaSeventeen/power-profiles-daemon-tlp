@@ -566,6 +566,7 @@ class Tests(dbusmock.DBusTestCase):
         )
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "no_turbo"), "0\n")
+        self.write_file_contents(os.path.join(pstate_dir, "turbo_pct"), "1\n")
         self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
 
         self.start_daemon()
@@ -649,6 +650,7 @@ class Tests(dbusmock.DBusTestCase):
         )
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "no_turbo"), "0\n")
+        self.write_file_contents(os.path.join(pstate_dir, "turbo_pct"), "1\n")
         self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
 
         self.start_daemon()
@@ -827,6 +829,7 @@ class Tests(dbusmock.DBusTestCase):
         )
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "no_turbo"), "0\n")
+        self.write_file_contents(os.path.join(pstate_dir, "turbo_pct"), "1\n")
         self.write_file_contents(os.path.join(pstate_dir, "status"), "passive\n")
 
         self.start_daemon()
@@ -870,6 +873,7 @@ class Tests(dbusmock.DBusTestCase):
         )
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "no_turbo"), "0\n")
+        self.write_file_contents(os.path.join(pstate_dir, "turbo_pct"), "1\n")
         self.write_file_contents(os.path.join(pstate_dir, "status"), "passive\n")
 
         self.start_daemon()

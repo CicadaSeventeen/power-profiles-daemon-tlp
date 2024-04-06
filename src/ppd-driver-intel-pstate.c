@@ -118,13 +118,12 @@ sys_has_turbo (void)
 {
   g_autofree char *turbo_pct_path = NULL;
   g_autofree char *contents = NULL;
-  gboolean has_turbo = TRUE;
+  gboolean has_turbo = FALSE;
 
   turbo_pct_path = ppd_utils_get_sysfs_path (TURBO_PCT_PATH);
   if (g_file_get_contents (turbo_pct_path, &contents, NULL, NULL)) {
     contents = g_strchomp (contents);
-    if (g_strcmp0 (contents, "0") == 0)
-      has_turbo = FALSE;
+    has_turbo = (g_strcmp0 (contents, "0") != 0);
   }
 
   return has_turbo;
