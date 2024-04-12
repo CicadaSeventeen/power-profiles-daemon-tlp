@@ -13,13 +13,17 @@ Restart=on-failure
 StateDirectory=power-profiles-daemon
 
 # Lockdown
+CapabilityBoundingSet=CAP_SYS_ADMIN
 DevicePolicy=closed
+IPAddressDeny=any
 KeyringMode=private
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 NoNewPrivileges=yes
 PrivateDevices=yes
 PrivateTmp=yes
+PrivateNetwork=yes
+PrivateUsers=yes
 ProtectClock=yes
 ProtectControlGroups=yes
 ProtectHome=yes
@@ -35,6 +39,10 @@ RestrictRealtime=true
 RestrictNamespaces=yes
 RestrictRealtime=yes
 RestrictSUIDSGID=yes
+SystemCallFilter=@system-service
+SystemCallFilter=~@resources @privileged
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=graphical.target
