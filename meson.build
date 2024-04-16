@@ -78,11 +78,18 @@ address_sanitizer = get_option('b_sanitize') == 'address' or \
   get_option('b_sanitize') == 'address,undefined' or \
   get_option('b_sanitize') == 'leak'
 
-bashcomp = dependency('bash-completion', required: get_option('bashcomp'))
-zshcomp = get_option('zshcomp') != ''
-
 python = import('python')
 python3 = python.find_installation('python3')
+
+script = 'import importlib.util; import sys; exit(1) if importlib.util.find_spec(\''+ 'shtab' +'\') is None else exit(0)'
+if run_command(python3, '-c', script, check: false).returncode() == 0
+  has_shtab = true
+else
+  has_shtab = false
+endif
+
+bashcomp = dependency('bash-completion', required: get_option('bashcomp').disable_auto_if(not has_shtab))
+zshcomp = get_option('zshcomp') != ''
 
 if bashcomp.found() or zshcomp
   python3_required_modules += 'shtab'
