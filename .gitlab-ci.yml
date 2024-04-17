@@ -117,8 +117,9 @@ dist_install:
         --warnlevel 2
         -Dmanpage=enabled
         -Dbashcomp=enabled
-        -Dzshcomp=enabled
+        -Dzshcomp=share/zsh/site-functions
         -Dtests=false
+        -Dprefix=`pwd`/dist
         _build
     - meson install -C _build
     - ninja -C _build uninstall -v
