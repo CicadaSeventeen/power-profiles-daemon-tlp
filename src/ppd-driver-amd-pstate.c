@@ -183,6 +183,21 @@ profile_to_epp_pref (PpdProfile profile, gboolean battery)
   g_return_val_if_reached (NULL);
 }
 
+static const char *
+profile_to_cpb_pref (PpdProfile profile)
+{
+  switch (profile) {
+  case PPD_PROFILE_POWER_SAVER:
+    return "0";
+  case PPD_PROFILE_BALANCED:
+  case PPD_PROFILE_PERFORMANCE:
+    return "1";
+  }
+
+  g_return_val_if_reached (NULL);
+
+}
+
 static gboolean
 apply_pref_to_devices (GPtrArray   *devices,
                        PpdProfile   profile,
@@ -191,17 +206,20 @@ apply_pref_to_devices (GPtrArray   *devices,
 {
   const char *epp_pref;
   const char *gov_pref;
+  const char *cpb_pref;
 
   if (profile == PPD_PROFILE_UNSET)
     return TRUE;
 
   epp_pref = profile_to_epp_pref (profile, battery);
   gov_pref = profile_to_gov_pref (profile);
+  cpb_pref = profile_to_cpb_pref (profile);
 
   for (guint i = 0; i < devices->len; ++i) {
     const char *base = g_ptr_array_index (devices, i);
     g_autofree char *epp = NULL;
     g_autofree char *gov = NULL;
+    g_autofree char *cpb = NULL;
 
     gov = g_build_filename (base,
                             "scaling_governor",
@@ -216,6 +234,12 @@ apply_pref_to_devices (GPtrArray   *devices,
 
     if (!ppd_utils_write (epp, epp_pref, error))
       return FALSE;
+
+    cpb = g_build_filename (base, "boost", NULL);
+    if (g_file_test (cpb, G_FILE_TEST_EXISTS)) {
+      if (!ppd_utils_write (cpb, cpb_pref, error))
+        return FALSE;
+    }
   }
 
   return TRUE;

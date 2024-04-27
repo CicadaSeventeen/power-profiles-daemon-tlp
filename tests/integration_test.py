@@ -1140,6 +1140,74 @@ class Tests(dbusmock.DBusTestCase):
         self.assert_file_eventually_contains(energy_prefs, "power")
         self.assert_file_eventually_contains(scaling_governor, "powersave")
 
+    # pylint: disable=too-many-statements
+    def test_amd_pstate_boost(self):
+        """AMD P-State driver boost support"""
+
+        # Create 2 CPUs with preferences
+        dir1 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy0/"
+        )
+        os.makedirs(dir1)
+        self.write_file_contents(os.path.join(dir1, "boost"), "1\n")
+        self.write_file_contents(os.path.join(dir1, "scaling_governor"), "powersave\n")
+        self.write_file_contents(
+            os.path.join(dir1, "energy_performance_preference"), "performance\n"
+        )
+        dir2 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy1/"
+        )
+        os.makedirs(dir2)
+        self.write_file_contents(os.path.join(dir2, "boost"), "1\n")
+        self.write_file_contents(os.path.join(dir2, "scaling_governor"), "powersave\n")
+        self.write_file_contents(
+            os.path.join(dir2, "energy_performance_preference"), "performance\n"
+        )
+
+        # Create AMD P-State configuration
+        pstate_dir = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/amd_pstate"
+        )
+        os.makedirs(pstate_dir)
+        self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
+
+        # desktop PM profile
+        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
+        os.makedirs(dir3)
+        self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
+
+        self.start_daemon()
+
+        profiles = self.get_dbus_property("Profiles")
+        self.assertEqual(len(profiles), 3)
+
+        self.assertEqual(profiles[0]["Driver"], "multiple")
+        self.assertEqual(profiles[0]["CpuDriver"], "amd_pstate")
+        self.assertEqual(profiles[0]["Profile"], "power-saver")
+
+        energy_prefs = os.path.join(dir2, "energy_performance_preference")
+        scaling_governor = os.path.join(dir2, "scaling_governor")
+        boost = os.path.join(dir2, "boost")
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+        self.assert_file_eventually_contains(scaling_governor, "powersave")
+
+        # Set performance mode
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("performance"))
+        self.assertEqual(self.get_dbus_property("ActiveProfile"), "performance")
+
+        self.assert_file_eventually_contains(energy_prefs, "performance")
+        self.assert_file_eventually_contains(scaling_governor, "performance")
+        self.assert_file_eventually_contains(boost, "1")
+
+        # Set powersave mode
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("power-saver"))
+        self.assertEqual(self.get_dbus_property("ActiveProfile"), "power-saver")
+
+        self.assert_file_eventually_contains(energy_prefs, "power")
+        self.assert_file_eventually_contains(scaling_governor, "powersave")
+        self.assert_file_eventually_contains(boost, "0")
+
     def test_amd_pstate_balance(self):
         """AMD P-State driver (balance)"""
 
