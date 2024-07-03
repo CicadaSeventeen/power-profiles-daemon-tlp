@@ -198,6 +198,21 @@ profile_to_cpb_pref (PpdProfile profile)
 
 }
 
+static const char *
+profile_to_min_freq (PpdProfile profile)
+{
+  switch (profile) {
+  case PPD_PROFILE_POWER_SAVER:
+    return "cpuinfo_min_freq";
+  case PPD_PROFILE_BALANCED:
+  case PPD_PROFILE_PERFORMANCE:
+    return "amd_pstate_lowest_nonlinear_freq";
+  }
+
+  g_return_val_if_reached (NULL);
+
+}
+
 static gboolean
 apply_pref_to_devices (GPtrArray   *devices,
                        PpdProfile   profile,
@@ -207,6 +222,7 @@ apply_pref_to_devices (GPtrArray   *devices,
   const char *epp_pref;
   const char *gov_pref;
   const char *cpb_pref;
+  const char *min_freq;
 
   if (profile == PPD_PROFILE_UNSET)
     return TRUE;
@@ -214,12 +230,14 @@ apply_pref_to_devices (GPtrArray   *devices,
   epp_pref = profile_to_epp_pref (profile, battery);
   gov_pref = profile_to_gov_pref (profile);
   cpb_pref = profile_to_cpb_pref (profile);
+  min_freq = profile_to_min_freq (profile);
 
   for (guint i = 0; i < devices->len; ++i) {
     const char *base = g_ptr_array_index (devices, i);
     g_autofree char *epp = NULL;
     g_autofree char *gov = NULL;
     g_autofree char *cpb = NULL;
+    g_autofree char *min_freq_path = NULL;
 
     gov = g_build_filename (base,
                             "scaling_governor",
@@ -238,6 +256,20 @@ apply_pref_to_devices (GPtrArray   *devices,
     cpb = g_build_filename (base, "boost", NULL);
     if (g_file_test (cpb, G_FILE_TEST_EXISTS)) {
       if (!ppd_utils_write (cpb, cpb_pref, error))
+        return FALSE;
+    }
+
+    min_freq_path = g_build_filename (base, min_freq, NULL);
+    if (g_file_test (min_freq_path, G_FILE_TEST_EXISTS)) {
+      g_autofree char *scaling_freq_path = NULL;
+      g_autofree char *min_freq_val = NULL;
+
+      if (!g_file_get_contents (min_freq_path, &min_freq_val, NULL, NULL))
+        return FALSE;
+      min_freq_val = g_strchomp (min_freq_val);
+
+      scaling_freq_path = g_build_filename (base, "scaling_min_freq", NULL);
+      if (!ppd_utils_write (scaling_freq_path, min_freq_val, error))
         return FALSE;
     }
   }
