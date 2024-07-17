@@ -251,6 +251,18 @@ ppd_driver_power_changed (PpdDriver              *driver,
   return PPD_DRIVER_GET_CLASS (driver)->power_changed (driver, reason, error);
 }
 
+gboolean ppd_driver_battery_changed (PpdDriver              *driver,
+                                     gdouble                val,
+                                     GError               **error)
+{
+  g_return_val_if_fail (PPD_IS_DRIVER (driver), FALSE);
+
+  if (!PPD_DRIVER_GET_CLASS (driver)->battery_changed)
+    return TRUE;
+
+  return PPD_DRIVER_GET_CLASS (driver)->battery_changed (driver, val, error);
+}
+
 gboolean
 ppd_driver_prepare_to_sleep (PpdDriver  *driver,
                              gboolean    start,

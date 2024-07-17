@@ -41,6 +41,9 @@
 #define UPOWER_DBUS_PATH                  "/org/freedesktop/UPower"
 #define UPOWER_DBUS_INTERFACE             "org.freedesktop.UPower"
 
+#define UPOWER_DBUS_DISPLAY_DEVICE_PATH   "/org/freedesktop/UPower/devices/DisplayDevice"
+#define UPOWER_DBUS_DEVICE_INTERFACE      "org.freedesktop.UPower.Device"
+
 #define LOGIND_DBUS_NAME                  "org.freedesktop.login1"
 #define LOGIND_DBUS_PATH                  "/org/freedesktop/login1"
 #define LOGIND_DBUS_INTERFACE             "org.freedesktop.login1.Manager"
@@ -82,8 +85,11 @@ typedef struct {
   GHashTable *profile_holds;
 
   GDBusProxy *upower_proxy;
+  GDBusProxy *upower_display_proxy;
   gulong upower_watch_id;
+  gulong upower_display_watch_id;
   gulong upower_properties_id;
+  gulong upower_display_properties_id;
   PpdPowerChangedReason power_changed_reason;
 
   guint logind_sleep_signal_id;
@@ -1023,8 +1029,8 @@ bus_acquired_handler (GDBusConnection *connection,
 }
 
 static void
-upower_battery_update_state_from_value (PpdApp   *data,
-                                        GVariant *battery_val)
+upower_source_update_from_value (PpdApp   *data,
+                                 GVariant *battery_val)
 {
   PpdPowerChangedReason reason;
 
@@ -1039,12 +1045,62 @@ upower_battery_update_state_from_value (PpdApp   *data,
 }
 
 static void
-upower_battery_update_state (PpdApp *data)
+upower_source_update (PpdApp *data)
 {
   g_autoptr(GVariant) battery_val = NULL;
 
   battery_val = g_dbus_proxy_get_cached_property (data->upower_proxy, "OnBattery");
-  upower_battery_update_state_from_value (data, battery_val);
+  upower_source_update_from_value (data, battery_val);
+}
+
+static void
+upower_battery_changed(PpdApp *data, gdouble level)
+{
+  g_info ("Battery level changed to %f", level);
+
+  for (guint i = 0; i < data->actions->len; i++) {
+    g_autoptr(GError) error = NULL;
+    PpdAction *action;
+
+    action = g_ptr_array_index (data->actions, i);
+
+    if (!ppd_action_battery_changed (action, level, &error)) {
+      g_warning ("failed to update action %s: %s",
+                 ppd_action_get_action_name (action),
+                 error->message);
+      g_clear_error (&error);
+      continue;
+    }
+  }
+
+  if (PPD_IS_DRIVER_CPU (data->cpu_driver)) {
+    g_autoptr(GError) error = NULL;
+
+    if (!ppd_driver_battery_changed (PPD_DRIVER (data->cpu_driver), level, &error)) {
+      g_warning ("failed to update driver %s: %s",
+                 ppd_driver_get_driver_name (PPD_DRIVER (data->cpu_driver)),
+                 error->message);
+    }
+  }
+
+  if (PPD_IS_DRIVER_PLATFORM (data->platform_driver)) {
+    g_autoptr(GError) error = NULL;
+
+    if (!ppd_driver_battery_changed (PPD_DRIVER (data->platform_driver), level, &error)) {
+      g_warning ("failed to update driver %s: %s",
+                 ppd_driver_get_driver_name (PPD_DRIVER (data->platform_driver)),
+                 error->message);
+    }
+  }
+}
+
+static void upower_battery_update  (PpdApp *data)
+{
+  g_autoptr(GVariant) val = NULL;
+
+  val = g_dbus_proxy_get_cached_property (data->upower_display_proxy, "Percentage");
+  if (val)
+    upower_battery_changed(data, g_variant_get_double (val));
 }
 
 static void
@@ -1055,12 +1111,18 @@ upower_properties_changed (GDBusProxy *proxy,
 {
   g_auto(GVariantDict) props_dict = G_VARIANT_DICT_INIT (changed_properties);
   g_autoptr(GVariant) battery_val = NULL;
+  g_autoptr(GVariant) percent_val = NULL;
 
   battery_val = g_variant_dict_lookup_value (&props_dict, "OnBattery",
                                              G_VARIANT_TYPE_BOOLEAN);
 
   if (battery_val)
-    upower_battery_update_state_from_value (data, battery_val);
+    upower_source_update_from_value (data, battery_val);
+
+  percent_val = g_variant_dict_lookup_value (&props_dict, "Percentage",
+                                             G_VARIANT_TYPE_DOUBLE);
+  if (percent_val)
+    upower_battery_changed(data, g_variant_get_double (percent_val));
 }
 
 static void
@@ -1123,7 +1185,7 @@ upower_name_owner_changed (GObject    *object,
 
   if (name_owner != NULL) {
     g_debug ("%s appeared", UPOWER_DBUS_NAME);
-    upower_battery_update_state (data);
+    upower_source_update (data);
     return;
   }
 
@@ -1163,7 +1225,42 @@ on_upower_proxy_cb (GObject *source_object,
                                             G_CALLBACK (upower_name_owner_changed),
                                             data);
 
-  upower_battery_update_state (data);
+  upower_source_update (data);
+}
+
+static void
+on_upower_display_proxy_cb (GObject *source_object,
+                            GAsyncResult *res,
+                            gpointer user_data)
+{
+  PpdApp *data = user_data;
+  g_autoptr(GDBusProxy) proxy = NULL;
+  g_autoptr(GError) error = NULL;
+
+  proxy = g_dbus_proxy_new_finish (res, &error);
+
+  if (proxy == NULL) {
+    if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+      return;
+
+    g_warning ("failed to connect to upower: %s", error->message);
+    return;
+  }
+
+  g_return_if_fail (data->upower_display_proxy == NULL);
+  data->upower_display_proxy = g_steal_pointer (&proxy);
+
+  data->upower_display_properties_id = g_signal_connect (data->upower_display_proxy,
+                                                         "g-properties-changed",
+                                                         G_CALLBACK (upower_properties_changed),
+                                                         data);
+
+  data->upower_display_watch_id = g_signal_connect (data->upower_display_proxy,
+                                                    "notify::g-name-owner",
+                                                    G_CALLBACK (upower_name_owner_changed),
+                                                    data);
+
+  upower_battery_update (data);
 }
 
 static void
@@ -1273,9 +1370,13 @@ stop_profile_drivers (PpdApp *data)
   g_ptr_array_set_size (data->actions, 0);
   g_clear_signal_handler (&data->upower_watch_id, data->upower_proxy);
   g_clear_signal_handler (&data->upower_properties_id, data->upower_proxy);
+  g_clear_signal_handler (&data->upower_display_watch_id, data->upower_display_proxy);
+  g_clear_signal_handler (&data->upower_display_properties_id, data->upower_display_proxy);
   g_clear_object (&data->cancellable);
   maybe_disconnect_object_by_data (data->upower_proxy, data);
   g_clear_object (&data->upower_proxy);
+  maybe_disconnect_object_by_data (data->upower_display_proxy, data);
+  g_clear_object (&data->upower_display_proxy);
   maybe_disconnect_object_by_data (data->cpu_driver, data);
   g_clear_object (&data->cpu_driver);
   maybe_disconnect_object_by_data (data->platform_driver, data);
@@ -1449,6 +1550,16 @@ start_profile_drivers (PpdApp *data)
                       UPOWER_DBUS_INTERFACE,
                       data->cancellable,
                       on_upower_proxy_cb,
+                      data);
+    g_dbus_proxy_new (data->connection,
+                      G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START |
+                      G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
+                      NULL,
+                      UPOWER_DBUS_NAME,
+                      UPOWER_DBUS_DISPLAY_DEVICE_PATH,
+                      UPOWER_DBUS_DEVICE_INTERFACE,
+                      data->cancellable,
+                      on_upower_display_proxy_cb,
                       data);
   } else {
     g_debug ("No battery state monitor required by any driver, let's skip it");

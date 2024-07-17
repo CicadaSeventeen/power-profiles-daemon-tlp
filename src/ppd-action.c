@@ -161,6 +161,18 @@ gboolean ppd_action_power_changed (PpdAction             *action,
   return PPD_ACTION_GET_CLASS (action)->power_changed (action, reason, error);
 }
 
+gboolean ppd_action_battery_changed (PpdAction             *action,
+                                     gdouble                val,
+                                     GError               **error)
+{
+  g_return_val_if_fail (PPD_IS_ACTION (action), FALSE);
+
+  if (!PPD_ACTION_GET_CLASS (action)->battery_changed)
+    return TRUE;
+
+  return PPD_ACTION_GET_CLASS (action)->battery_changed (action, val, error);
+}
+
 const char *
 ppd_action_get_action_name (PpdAction *action)
 {

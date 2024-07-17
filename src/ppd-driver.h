@@ -46,6 +46,7 @@ typedef enum{
  * @probe: Called by the daemon on startup.
  * @activate_profile: Called by the daemon for every profile change.
  * @power_changed: Called by the daemon when power adapter status changes
+ * @battery_changed: Called by the daemon when the battery level changes.
  *
  * New profile drivers should not derive from #PpdDriver.  They should
  * derive from the child from #PpdDriverCpu or #PpdDriverPlatform drivers
@@ -66,6 +67,9 @@ struct _PpdDriverClass
   gboolean       (* prepare_to_sleep) (PpdDriver                   *driver,
                                        gboolean                     start,
                                        GError                     **error);
+  gboolean       (* battery_changed)  (PpdDriver                   *driver,
+                                       gdouble                      val,
+                                       GError                     **error);
 };
 
 #ifndef __GTK_DOC_IGNORE__
@@ -74,6 +78,7 @@ gboolean ppd_driver_activate_profile (PpdDriver *driver,
   PpdProfile profile, PpdProfileActivationReason reason, GError **error);
 gboolean ppd_driver_power_changed (PpdDriver *driver, PpdPowerChangedReason reason, GError **error);
 gboolean ppd_driver_prepare_to_sleep (PpdDriver  *driver, gboolean start, GError **error);
+gboolean ppd_driver_battery_changed (PpdDriver *driver, gdouble val, GError **error);
 const char *ppd_driver_get_driver_name (PpdDriver *driver);
 PpdProfile ppd_driver_get_profiles (PpdDriver *driver);
 const char *ppd_driver_get_performance_degraded (PpdDriver *driver);
