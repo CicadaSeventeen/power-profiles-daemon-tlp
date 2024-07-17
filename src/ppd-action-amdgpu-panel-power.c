@@ -47,6 +47,7 @@ struct _PpdActionAmdgpuPanelPower
   gint panel_power_saving;
   gboolean valid_battery;
   gboolean on_battery;
+  gdouble battery_level;
 };
 
 G_DEFINE_TYPE (PpdActionAmdgpuPanelPower, ppd_action_amdgpu_panel_power, PPD_TYPE_ACTION)
@@ -148,10 +149,20 @@ ppd_action_amdgpu_panel_update_target (PpdActionAmdgpuPanelPower  *self,
   if (self->on_battery) {
     switch (self->last_profile) {
     case PPD_PROFILE_POWER_SAVER:
-      target = 3;
+      if (!self->battery_level || self->battery_level >= 50)
+        target = 0;
+      else if (self->battery_level > 30)
+        target = 1;
+      else if (self->battery_level > 20 && self->battery_level <= 30)
+        target = 2;
+      else /* < 20 */
+        target = 3;
       break;
     case PPD_PROFILE_BALANCED:
-      target = 1;
+      if (!self->battery_level || self->battery_level >= 30)
+        target = 0;
+      else
+        target = 1;
       break;
     case PPD_PROFILE_PERFORMANCE:
       target = 0;
@@ -159,6 +170,7 @@ ppd_action_amdgpu_panel_update_target (PpdActionAmdgpuPanelPower  *self,
     }
   }
 
+  g_info("Updating panel to %d due to 🔋 %d (%f)", target, self->on_battery, self->battery_level);
   if (!set_panel_power (self, target, error))
     return FALSE;
   self->panel_power_saving = target;
@@ -204,6 +216,19 @@ ppd_action_amdgpu_panel_power_power_changed (PpdAction             *action,
   }
 
   self->valid_battery = TRUE;
+
+  return ppd_action_amdgpu_panel_update_target (self, error);
+}
+
+static gboolean
+ppd_action_amdgpu_panel_power_battery_changed (PpdAction           *action,
+                                               gdouble              val,
+                                               GError             **error)
+{
+  PpdActionAmdgpuPanelPower *self = PPD_ACTION_AMDGPU_PANEL_POWER (action);
+
+  self->battery_level = val;
+
   return ppd_action_amdgpu_panel_update_target (self, error);
 }
 
@@ -284,6 +309,7 @@ ppd_action_amdgpu_panel_power_class_init (PpdActionAmdgpuPanelPowerClass *klass)
   driver_class->probe = ppd_action_amdgpu_panel_power_probe;
   driver_class->activate_profile = ppd_action_amdgpu_panel_power_activate_profile;
   driver_class->power_changed = ppd_action_amdgpu_panel_power_power_changed;
+  driver_class->battery_changed = ppd_action_amdgpu_panel_power_battery_changed;
 }
 
 static void

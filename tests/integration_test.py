@@ -1623,18 +1623,34 @@ class Tests(dbusmock.DBusTestCase):
 
         # start upower and try again
         self.stop_daemon()
-        self.start_dbus_template(
+        _, obj, _ = self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": True},
         )
+        obj.SetupDisplayDevice(
+            2, 1, 50.0, 40.0, 80.0, 2.5, 3600, 1800, True, "half battery", 3
+        )
         self.start_daemon()
 
-        # verify balanced updated it
+        # verify balanced has it off at half battery
         self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("balanced"))
+        self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "0")
+
+        # verify balanced turned it on when less than third battery
+        obj.SetupDisplayDevice(2, 1, 29.0, 40.0, 80.0, 2.5, 3600, 1800, True, "29%", 3)
         self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "1")
 
-        # verify power saver updated it
+        # switch to power saver with a large battery, make sure off
+        obj.SetupDisplayDevice(2, 1, 70, 40.0, 80.0, 2.5, 3600, 1800, True, "70%", 3)
         self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("power-saver"))
+        self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "0")
+
+        # set power saver with less than half battery, should turn on
+        obj.SetupDisplayDevice(2, 1, 49, 40.0, 80.0, 2.5, 3600, 1800, True, "49%", 3)
+        self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "1")
+
+        # set power saver with very little battery, should turn on at 3
+        obj.SetupDisplayDevice(2, 1, 15, 40.0, 80.0, 2.5, 3600, 1800, True, "15%", 3)
         self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "3")
 
         # add another device that supports the feature
