@@ -1,6 +1,7 @@
 image: fedora:rawhide
 
 variables:
+  DNFOPT: --setopt=protected_packages=,
   DEPENDENCIES: gcc
                 pkgconfig(udev)
                 pkgconfig(systemd)
@@ -34,17 +35,11 @@ workflow:
   before_script:
     - echo 8096000 > /proc/sys/fs/inotify/max_user_instances
     - mkdir -m 700 $TMPDIR -p
-    - if command -v dnf5 &>/dev/null; then ln -sfv $(command -v dnf5) /usr/local/bin/dnf; fi
-    - dnf update -y
-    - dnf install -y $DEPENDENCIES $JOB_DEPS
-    # dnf5 does not include debuginfo-install yet, so let's use dnf4 instead.
+    - dnf update -y $DNFOPT
+    - dnf install -y $DNFOPT $DEPENDENCIES $JOB_DEPS
     - if [ -n "$JOB_DEBUG_DEPS" ]; then
-        if ! command -v dnf4 &>/dev/null; then
-          dnf install -y dnf4;
-          dnf4 update -y;
-        fi;
-        dnf4 install -y "dnf-command(debuginfo-install)";
-        dnf4 debuginfo-install -y $JOB_DEBUG_DEPS;
+        dnf install -y $DNFOPT "dnf-command(debuginfo-install)";
+        dnf debuginfo-install -y $JOB_DEBUG_DEPS;
       fi
 
 pre_commit:
