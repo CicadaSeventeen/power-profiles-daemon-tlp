@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <errno.h>
 
+#define PROC_CPUINFO_PATH      "/proc/cpuinfo"
+
 char *
 ppd_utils_get_sysfs_path (const char *filename)
 {
@@ -164,4 +166,32 @@ ppd_utils_find_device (const char   *subsystem,
   g_list_free_full (devices, g_object_unref);
 
   return ret;
+}
+
+gboolean
+ppd_utils_match_cpu_vendor (const char *vendor)
+{
+  g_autofree gchar *cpuinfo_path = NULL;
+  g_autofree gchar *cpuinfo = NULL;
+  g_auto(GStrv) lines = NULL;
+
+  cpuinfo_path = ppd_utils_get_sysfs_path (PROC_CPUINFO_PATH);
+  if (!g_file_get_contents (cpuinfo_path, &cpuinfo, NULL, NULL))
+    return FALSE;
+
+  lines = g_strsplit (cpuinfo, "\n", -1);
+
+  for (gchar **line = lines; *line != NULL; line++) {
+      if (g_str_has_prefix (*line, "vendor_id") &&
+          strchr (*line, ':')) {
+          g_auto(GStrv) sections = g_strsplit (*line, ":", 2);
+
+          if (g_strv_length (sections) < 2)
+            continue;
+          if (g_strcmp0 (g_strstrip (sections[1]), vendor) == 0)
+            return TRUE;
+      }
+  }
+
+  return FALSE;
 }

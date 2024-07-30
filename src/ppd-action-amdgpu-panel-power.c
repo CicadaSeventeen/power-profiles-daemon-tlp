@@ -17,8 +17,6 @@
 #include "ppd-profile.h"
 #include "ppd-utils.h"
 
-#define PROC_CPUINFO_PATH      "/proc/cpuinfo"
-
 #define PANEL_POWER_SYSFS_NAME "amdgpu/panel_power_savings"
 #define PANEL_STATUS_SYSFS_NAME "status"
 
@@ -259,30 +257,7 @@ udev_uevent_cb (GUdevClient *client,
 static PpdProbeResult
 ppd_action_amdgpu_panel_power_probe (PpdAction *action)
 {
-  g_autofree gchar *cpuinfo_path = NULL;
-  g_autofree gchar *cpuinfo = NULL;
-  g_auto(GStrv) lines = NULL;
-
-  cpuinfo_path = ppd_utils_get_sysfs_path (PROC_CPUINFO_PATH);
-  if (!g_file_get_contents (cpuinfo_path, &cpuinfo, NULL, NULL))
-    return PPD_PROBE_RESULT_FAIL;
-
-  lines = g_strsplit (cpuinfo, "\n", -1);
-
-  for (gchar **line = lines; *line != NULL; line++) {
-      if (g_str_has_prefix (*line, "vendor_id") &&
-          strchr (*line, ':')) {
-          g_auto(GStrv) sections = g_strsplit (*line, ":", 2);
-
-          if (g_strv_length (sections) < 2)
-            continue;
-          if (g_strcmp0 (g_strstrip (sections[1]), "AuthenticAMD") == 0)
-            return PPD_PROBE_RESULT_SUCCESS;
-      }
-  }
-
-
-  return PPD_PROBE_RESULT_FAIL;
+  return ppd_utils_match_cpu_vendor ("AuthenticAMD") ? PPD_PROBE_RESULT_SUCCESS : PPD_PROBE_RESULT_FAIL;
 }
 
 static void

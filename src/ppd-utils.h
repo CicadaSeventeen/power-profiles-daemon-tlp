@@ -33,3 +33,4 @@ GFileMonitor *ppd_utils_monitor_sysfs_attr (GUdevDevice  *device,
 GUdevDevice *ppd_utils_find_device (const char   *subsystem,
                                     GCompareFunc  func,
                                     gpointer      user_data);
+gboolean ppd_utils_match_cpu_vendor (const char *vendor);
