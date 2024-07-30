@@ -20,10 +20,6 @@
 #define PANEL_POWER_SYSFS_NAME "amdgpu/panel_power_savings"
 #define PANEL_STATUS_SYSFS_NAME "status"
 
-#define UPOWER_DBUS_NAME       "org.freedesktop.UPower"
-#define UPOWER_DBUS_PATH       "/org/freedesktop/UPower"
-#define UPOWER_DBUS_INTERFACE  "org.freedesktop.UPower"
-
 /**
  * SECTION:ppd-action-amdgpu-panel-power
  * @Short_description: Power savings for eDP connected displays
