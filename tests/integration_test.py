@@ -1646,6 +1646,28 @@ class Tests(dbusmock.DBusTestCase):
         upowerd_obj.Set("org.freedesktop.UPower", "OnBattery", True)
         self.assert_file_eventually_contains(energy_prefs, "balance_power")
 
+    def test_amdgpu_dpm(self):
+        """Verify AMDGPU dpm power actions"""
+        amdgpu_dpm = "device/power_dpm_force_performance_level"
+        card = self.testbed.add_device(
+            "drm",
+            "card0",
+            None,
+            [amdgpu_dpm, "auto\n"],
+            ["DEVTYPE", "drm_minor"],
+        )
+        self.create_amd_apu()
+
+        self.start_daemon()
+
+        self.assertIn("amdgpu_dpm", self.get_dbus_property("Actions"))
+
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("balanced"))
+        self.assert_sysfs_attr_eventually_is(card, amdgpu_dpm, "auto")
+
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("power-saver"))
+        self.assert_sysfs_attr_eventually_is(card, amdgpu_dpm, "low")
+
     def test_amdgpu_panel_power(self):
         """Verify AMDGPU Panel power actions"""
         amdgpu_panel_power_savings = "amdgpu/panel_power_savings"

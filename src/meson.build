@@ -90,6 +90,7 @@ sources += [
   'power-profiles-daemon.c',
   'ppd-action-trickle-charge.c',
   'ppd-action-amdgpu-panel-power.c',
+  'ppd-action-amdgpu-dpm.c',
   'ppd-driver-intel-pstate.c',
   'ppd-driver-amd-pstate.c',
   'ppd-driver-platform-profile.c',

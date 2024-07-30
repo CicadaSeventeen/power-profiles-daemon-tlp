@@ -7,7 +7,7 @@
  *
  */
 
-#define G_LOG_DOMAIN "AmdgpuAction"
+#define G_LOG_DOMAIN "AmdgpuPanel"
 
 #include "config.h"
 
