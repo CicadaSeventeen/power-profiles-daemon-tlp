@@ -126,6 +126,8 @@ udev_uevent_cb (GUdevClient *client,
 {
   PpdActionAmdgpuDpm *self = user_data;
 
+  g_debug ("Device %s %s", g_udev_device_get_sysfs_path (device), action);
+
   if (!g_str_equal (action, "add"))
     return;
 
