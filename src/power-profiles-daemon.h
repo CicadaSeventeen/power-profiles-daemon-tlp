@@ -12,3 +12,5 @@
 #include "ppd-profile.h"
 
 #define NUM_PROFILES 3
+
+void restart_profile_drivers_for_default_app (void);

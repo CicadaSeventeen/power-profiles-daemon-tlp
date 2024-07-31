@@ -13,8 +13,9 @@
 #include <stdio.h>
 #include <termios.h>
 
+#include "power-profiles-daemon.h"
+
 extern void main_loop_quit (void);
-void restart_profile_drivers_for_default_app (void);
 
 struct _PpdDriverFake
 {
