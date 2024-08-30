@@ -1,3 +1,29 @@
+0.22
+----
+
+Since this release power-profiles-daemon is also battery-level aware and
+some drivers use this value to be smarter at tuning their optimizations.
+In particular both the AMD panel power action now uses a progressive approach,
+changing the the ABM based on the battery percentage.
+
+AMD p-state received various features and improvements:
+ - it supports core performance boost when not in power-saver mode.
+ - uses minimum frequency to lowest non-linear frequency
+ - it is more impervious to faulty firmware and kernel bugs
+
+Added support for changing DPM clocks on amdgpu, to explicitly set the DPM
+clocks down to "low" when in power-saver mode.
+
+The daemon command line interface now allows to disable logind and upower
+integration.
+
+Fixes handling of turbo_pct (now assumed as not present by default).
+
+The systemd service lockdown settings have been restricted even more.
+
+The systemd service starts later in the boot to avoid conflicts with
+module loading.
+
 0.21
 ----
 
