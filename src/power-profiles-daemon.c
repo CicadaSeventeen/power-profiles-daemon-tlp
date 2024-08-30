@@ -1055,7 +1055,7 @@ upower_source_update (PpdApp *data)
 }
 
 static void
-upower_battery_changed(PpdApp *data, gdouble level)
+upower_battery_changed (PpdApp *data, gdouble level)
 {
   g_info ("Battery level changed to %f", level);
 
@@ -1095,7 +1095,8 @@ upower_battery_changed(PpdApp *data, gdouble level)
   }
 }
 
-static void upower_battery_update  (PpdApp *data)
+static void
+upower_battery_update (PpdApp *data)
 {
   g_autoptr(GVariant) val = NULL;
 
@@ -1123,7 +1124,7 @@ upower_properties_changed (GDBusProxy *proxy,
   percent_val = g_variant_dict_lookup_value (&props_dict, "Percentage",
                                              G_VARIANT_TYPE_DOUBLE);
   if (percent_val)
-    upower_battery_changed(data, g_variant_get_double (percent_val));
+    upower_battery_changed (data, g_variant_get_double (percent_val));
 }
 
 static void
