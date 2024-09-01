@@ -114,6 +114,7 @@ probe_epp (PpdDriverAmdPstate *pstate)
   while ((dirname = g_dir_read_name (dir)) != NULL) {
     g_autofree char *base = NULL;
     g_autofree char *path = NULL;
+    g_autofree char *contents = NULL;
     g_autoptr(GError) error = NULL;
 
     base = g_build_filename (policy_dir,
@@ -125,6 +126,15 @@ probe_epp (PpdDriverAmdPstate *pstate)
                              NULL);
     if (!g_file_test (path, G_FILE_TEST_EXISTS))
       continue;
+
+    if (!g_file_get_contents (path, &contents, NULL, &error)) {
+      g_debug ("Failed to read %s: %s", path, error->message);
+      continue;
+    }
+    if (!ppd_utils_write (path, g_strchomp (contents), &error)) {
+      g_debug ("Failed to write %s: %s", path, error->message);
+      continue;
+    }
 
     if (!pstate->epp_devices)
       pstate->epp_devices = g_ptr_array_new_with_free_func (g_free);
