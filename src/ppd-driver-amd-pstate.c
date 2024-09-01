@@ -274,7 +274,7 @@ apply_pref_to_devices (GPtrArray   *devices,
       g_autofree char *scaling_freq_path = NULL;
       g_autofree char *min_freq_val = NULL;
 
-      if (!g_file_get_contents (min_freq_path, &min_freq_val, NULL, NULL))
+      if (!g_file_get_contents (min_freq_path, &min_freq_val, NULL, error))
         return FALSE;
       min_freq_val = g_strchomp (min_freq_val);
 
