@@ -20,6 +20,10 @@ available on every system. The "performance" mode is only available on select
 systems and is implemented by different "drivers" based on the system or
 systems it targets.
 
+Generally "power-saver" mode will limit performance to save power. While in "balanced"
+mode power-profiles-daemon will attempt to make changes to boost performance when
+needed. In "performance" mode performance will be maximized at the expense of power.
+
 In addition to those 2 or 3 modes (depending on the system), "actions" can be hooked
 up to change the behaviour of a particular device. For example, this can be used
 to disable the fast-charging for some USB devices when in power-saver mode.
