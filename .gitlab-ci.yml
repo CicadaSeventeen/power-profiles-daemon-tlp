@@ -1,65 +1,97 @@
-image: fedora:rawhide
+.templates_sha: &templates_sha 6a40df92957c8ce9ee741aaccc5daaaf70545b1e
 
-variables:
-  DNFOPT: --setopt=protected_packages=,
-  DEPENDENCIES: gcc
-                pkgconfig(udev)
-                pkgconfig(systemd)
-                pkgconfig(gio-2.0)
-                pkgconfig(gudev-1.0)
-                pkgconfig(upower-glib)
-                pkgconfig(polkit-gobject-1)
-                systemd
-                meson
-                git
-                python3-packaging
-  TEST_DEPENDENCIES: e2fsprogs
-                     python3-dbusmock
-                     python3-gobject
-                     python3-pylint
-                     umockdev
-  TEST_DEBUG_DEPENDENCIES: glib2
-                           glibc
-                           libgudev
-                           upower
-                           polkit-libs
+include:
+  - project: 'freedesktop/ci-templates'
+    ref: *templates_sha
+    file: '/templates/fedora.yml'
+
+stages:
+  - prep
+  - pre-commit
+  - test
+  - deploy
+
+.ppd.fedora:
+  variables:
+    FDO_DISTRIBUTION_VERSION: 41
+    FDO_DISTRIBUTION_TAG: '2024-09-03.1'
+    TMPDIR: $CI_BUILDS_DIR/tmpdir
+
+build-fedora-container:
+  extends:
+  - .fdo.container-build@fedora
+  - .ppd.fedora
+  stage: prep
+  variables:
+    FDO_DISTRIBUTION_PACKAGES: argparse-manpage
+                               bash-completion-devel
+                               clang-analyzer
+                               e2fsprogs
+                               gcc
+                               gcovr
+                               git
+                               glib-devel
+                               glib2
+                               glibc
+                               gtk-doc
+                               libasan
+                               libgudev
+                               libgudev-devel
+                               libubsan
+                               meson
+                               polkit-devel
+                               polkit-libs
+                               pre-commit
+                               python3-coverage
+                               python3-dbusmock
+                               python3-gobject
+                               python3-gobject
+                               python3-packaging
+                               python3-pylint
+                               python3-shtab
+                               systemd
+                               systemd-devel
+                               umockdev
+                               upower
+                               upower-devel
+                               valgrind
+                               which
+    DEBUG_DEPS: glib2
+                glibc
+                libgudev
+                upower
+                polkit-libs
+    FDO_DISTRIBUTION_EXEC: |
+      mkdir -m 700 $TMPDIR -p;
+      dnf install -y --setopt=protected_packages= "dnf-command(debuginfo-install)";
+      dnf debuginfo-install -y $DEBUG_DEPS;
+
+.ppd.fedora.base:
+  extends:
+    - .ppd.fedora
+    - .fdo.distribution-image@fedora
+
+.ppd.fedora.test:
+  extends:
+    - .ppd.fedora.base
+  before_script:
+    - echo 8096000 > /proc/sys/fs/inotify/max_user_instances
 
 workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_PIPELINE_SOURCE == 'push'
 
-.install-deps:
-  variables:
-    TMPDIR: $CI_BUILDS_DIR/tmpdir
-  before_script:
-    - echo 8096000 > /proc/sys/fs/inotify/max_user_instances
-    - mkdir -m 700 $TMPDIR -p
-    - dnf update -y $DNFOPT
-    - dnf install -y $DNFOPT $DEPENDENCIES $JOB_DEPS
-    - if [ -n "$JOB_DEBUG_DEPS" ]; then
-        dnf install -y $DNFOPT "dnf-command(debuginfo-install)";
-        dnf debuginfo-install -y $JOB_DEBUG_DEPS;
-      fi
-
 pre_commit:
-  variables:
-    DEPENDENCIES: {}
-    JOB_DEPS: pre-commit
-              git
+  stage: pre-commit
   extends:
-    - .install-deps
+    - .ppd.fedora.base
   script:
     - pre-commit run --all-files
 
 build_and_test:
-  variables:
-    JOB_DEPS: $TEST_DEPENDENCIES
-              gcovr
-              python3-coverage
-    JOB_DEBUG_DEPS: $TEST_DEBUG_DEPENDENCIES
   extends:
-    - .install-deps
+    - .ppd.fedora.test
   script:
     - meson setup
         --werror
@@ -98,13 +130,8 @@ build_and_test:
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
 
 dist_install:
-  variables:
-    JOB_DEPS: argparse-manpage
-              bash-completion-devel
-              python3-gobject
-              python3-shtab
   extends:
-    - .install-deps
+    - .ppd.fedora.test
   script:
     - meson setup
         --werror
@@ -128,13 +155,8 @@ dist_install:
            $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH)
 
 address_sanitizer:
-  variables:
-    JOB_DEPS: $TEST_DEPENDENCIES
-              libasan
-              libubsan
-    JOB_DEBUG_DEPS: $TEST_DEBUG_DEPENDENCIES
   extends:
-    - .install-deps
+    - .ppd.fedora.test
   script:
     - meson setup
         --werror
@@ -148,12 +170,8 @@ address_sanitizer:
     - _build/meson-logs/*.txt
 
 valgrind:
-  variables:
-    JOB_DEPS: $TEST_DEPENDENCIES
-              valgrind
-    JOB_DEBUG_DEPS: $TEST_DEBUG_DEPENDENCIES
   extends:
-    - .install-deps
+    - .ppd.fedora.test
   script:
     - meson setup
         --werror
@@ -166,11 +184,8 @@ valgrind:
     - _build/meson-logs/*.txt
 
 scan_build:
-  variables:
-    JOB_DEPS: clang-analyzer
-              which
   extends:
-    - .install-deps
+    - .ppd.fedora.base
   script:
     - meson setup _build -Dtests=false
     - env SCANBUILD=$(which scan-build) ninja -C _build scan-build
@@ -180,10 +195,8 @@ scan_build:
       - _build/meson-logs
 
 docs:
-  variables:
-    JOB_DEPS: gtk-doc
   extends:
-    - .install-deps
+    - .ppd.fedora.base
   script:
     - meson setup
         -Dgtk_doc=true
