@@ -1224,10 +1224,12 @@ on_upower_proxy_cb (GObject *source_object,
                                                  G_CALLBACK (upower_properties_changed),
                                                  data);
 
-  data->upower_watch_id = g_signal_connect (data->upower_proxy,
-                                            "notify::g-name-owner",
-                                            G_CALLBACK (upower_name_owner_changed),
-                                            data);
+  if (!data->upower_display_watch_id) {
+    data->upower_watch_id = g_signal_connect (data->upower_proxy,
+                                              "notify::g-name-owner",
+                                              G_CALLBACK (upower_name_owner_changed),
+                                              data);
+  }
 
   upower_source_update (data);
 }
@@ -1259,10 +1261,12 @@ on_upower_display_proxy_cb (GObject *source_object,
                                                          G_CALLBACK (upower_properties_changed),
                                                          data);
 
-  data->upower_display_watch_id = g_signal_connect (data->upower_display_proxy,
-                                                    "notify::g-name-owner",
-                                                    G_CALLBACK (upower_name_owner_changed),
-                                                    data);
+  if (!data->upower_watch_id) {
+    data->upower_display_watch_id = g_signal_connect (data->upower_display_proxy,
+                                                      "notify::g-name-owner",
+                                                      G_CALLBACK (upower_name_owner_changed),
+                                                      data);
+  }
 
   upower_battery_update (data);
 }
