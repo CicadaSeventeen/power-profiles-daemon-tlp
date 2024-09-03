@@ -17,7 +17,7 @@ stages:
     FDO_DISTRIBUTION_TAG: '2024-09-03.1'
     TMPDIR: $CI_BUILDS_DIR/tmpdir
 
-build-fedora-container:
+.ppd.fedora.build:
   extends:
   - .fdo.container-build@fedora
   - .ppd.fedora
@@ -66,6 +66,34 @@ build-fedora-container:
       dnf install -y --setopt=protected_packages= "dnf-command(debuginfo-install)";
       dnf debuginfo-install -y $DEBUG_DEPS;
 
+build-fedora-container:
+  extends:
+    - .ppd.fedora.build
+  only:
+    variables:
+      - $CI_PIPELINE_SOURCE != "schedule" &&
+        $PPD_CI_ACTION != "build-image"
+
+.ppd.fedora.force-rebuild:
+  variables:
+    FDO_FORCE_REBUILD: 1
+
+build-fedora-container-schedule:
+  extends:
+    - .ppd.fedora.force-rebuild
+    - .ppd.fedora.build
+  only:
+    variables:
+      - $CI_PIPELINE_SOURCE == "schedule" && $CRON_TASK == "BUILD_CI_IMAGES"
+
+build-fedora-container-manual:
+  extends:
+    - .ppd.fedora.force-rebuild
+    - .ppd.fedora.build
+  only:
+    variables:
+      - $PPD_CI_ACTION == "build-image"
+
 .ppd.fedora.base:
   extends:
     - .ppd.fedora
@@ -81,6 +109,8 @@ workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
     - if: $CI_PIPELINE_SOURCE == 'push'
+    - if: $CI_PIPELINE_SOURCE == 'schedule'
+    - if: $CI_PIPELINE_SOURCE == 'web'
 
 pre_commit:
   stage: pre-commit
