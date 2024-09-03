@@ -1427,7 +1427,8 @@ start_profile_drivers (PpdApp *data)
 {
   guint i;
   g_autoptr(GError) initial_error = NULL;
-  gboolean needs_battery_monitor = FALSE;
+  gboolean needs_battery_state_monitor = FALSE;
+  gboolean needs_battery_change_monitor = FALSE;
   gboolean needs_suspend_monitor = FALSE;
 
   data->cancellable = g_cancellable_new ();
@@ -1492,10 +1493,14 @@ start_profile_drivers (PpdApp *data)
         g_return_if_reached ();
 
       if (PPD_DRIVER_GET_CLASS (driver)->power_changed != NULL)
-        needs_battery_monitor = TRUE;
+        needs_battery_state_monitor = TRUE;
+
+      if (PPD_DRIVER_GET_CLASS (driver)->battery_changed != NULL)
+        needs_battery_change_monitor = TRUE;
 
       if (PPD_DRIVER_GET_CLASS (driver)->prepare_to_sleep != NULL)
         needs_suspend_monitor = TRUE;
+
       g_info ("Driver '%s' loaded", ppd_driver_get_driver_name (driver));
 
       g_signal_connect (G_OBJECT (driver), "notify::performance-degraded",
@@ -1522,7 +1527,10 @@ start_profile_drivers (PpdApp *data)
       }
 
       if (PPD_ACTION_GET_CLASS (action)->power_changed != NULL)
-        needs_battery_monitor = TRUE;
+        needs_battery_state_monitor = TRUE;
+
+      if (PPD_ACTION_GET_CLASS (action)->battery_changed != NULL)
+        needs_battery_change_monitor = TRUE;
 
       g_info ("Action '%s' loaded", ppd_action_get_action_name (action));
       g_ptr_array_add (data->actions, g_steal_pointer (&action));
@@ -1548,29 +1556,35 @@ start_profile_drivers (PpdApp *data)
 
   if (data->debug_options->disable_upower) {
     g_debug ("upower is disabled, let's skip it");
-  } else if (needs_battery_monitor) {
+  } else if (needs_battery_state_monitor || needs_battery_change_monitor) {
     /* start watching for power changes */
-    g_debug ("Battery state monitor required, connecting to upower...");
-    g_dbus_proxy_new (data->connection,
-                      G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START |
-                      G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
-                      NULL,
-                      UPOWER_DBUS_NAME,
-                      UPOWER_DBUS_PATH,
-                      UPOWER_DBUS_INTERFACE,
-                      data->cancellable,
-                      on_upower_proxy_cb,
-                      data);
-    g_dbus_proxy_new (data->connection,
-                      G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START |
-                      G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
-                      NULL,
-                      UPOWER_DBUS_NAME,
-                      UPOWER_DBUS_DISPLAY_DEVICE_PATH,
-                      UPOWER_DBUS_DEVICE_INTERFACE,
-                      data->cancellable,
-                      on_upower_display_proxy_cb,
-                      data);
+    if (needs_battery_state_monitor) {
+      g_debug ("Battery state monitor required, connecting to upower...");
+      g_dbus_proxy_new (data->connection,
+                        G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START |
+                        G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
+                        NULL,
+                        UPOWER_DBUS_NAME,
+                        UPOWER_DBUS_PATH,
+                        UPOWER_DBUS_INTERFACE,
+                        data->cancellable,
+                        on_upower_proxy_cb,
+                        data);
+    }
+
+    if (needs_battery_change_monitor) {
+      g_debug ("Battery change monitor required, connecting to upower...");
+      g_dbus_proxy_new (data->connection,
+                        G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START |
+                        G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
+                        NULL,
+                        UPOWER_DBUS_NAME,
+                        UPOWER_DBUS_DISPLAY_DEVICE_PATH,
+                        UPOWER_DBUS_DEVICE_INTERFACE,
+                        data->cancellable,
+                        on_upower_display_proxy_cb,
+                        data);
+    }
   } else {
     g_debug ("No battery state monitor required by any driver, let's skip it");
   }
