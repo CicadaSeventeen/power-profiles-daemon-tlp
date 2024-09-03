@@ -1694,9 +1694,14 @@ class Tests(dbusmock.DBusTestCase):
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": True},
         )
-        obj.SetupDisplayDevice(
-            2, 1, 50.0, 40.0, 80.0, 2.5, 3600, 1800, True, "half battery", 3
-        )
+
+        def set_battery_level(percentage):
+            obj.SetDeviceProperties(
+                "/org/freedesktop/UPower/devices/DisplayDevice",
+                {"Percentage": dbus.Double(percentage, variant_level=1)},
+            )
+
+        set_battery_level(50)
         self.start_daemon()
 
         # verify balanced has it off at half battery
@@ -1704,20 +1709,20 @@ class Tests(dbusmock.DBusTestCase):
         self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "0")
 
         # verify balanced turned it on when less than third battery
-        obj.SetupDisplayDevice(2, 1, 29.0, 40.0, 80.0, 2.5, 3600, 1800, True, "29%", 3)
+        set_battery_level(29)
         self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "1")
 
         # switch to power saver with a large battery, make sure off
-        obj.SetupDisplayDevice(2, 1, 70, 40.0, 80.0, 2.5, 3600, 1800, True, "70%", 3)
+        set_battery_level(70)
         self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("power-saver"))
         self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "0")
 
-        # set power saver with less than half battery, should turn on
-        obj.SetupDisplayDevice(2, 1, 49, 40.0, 80.0, 2.5, 3600, 1800, True, "49%", 3)
+        # # set power saver with less than half battery, should turn on
+        set_battery_level(49)
         self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "1")
 
         # set power saver with very little battery, should turn on at 3
-        obj.SetupDisplayDevice(2, 1, 15, 40.0, 80.0, 2.5, 3600, 1800, True, "15%", 3)
+        set_battery_level(15)
         self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "3")
 
         # add another device that supports the feature
