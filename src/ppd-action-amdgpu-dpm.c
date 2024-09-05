@@ -99,6 +99,11 @@ ppd_action_amdgpu_dpm_update_target (PpdActionAmdgpuDpm *self, GError **error)
       continue;
     }
 
+    if (g_strcmp0 (value, "manual") == 0) {
+      g_info ("Device %s is in manual mode, not changing", g_udev_device_get_sysfs_path (dev));
+      continue;
+    }
+
     g_info ("Setting device %s to %s", g_udev_device_get_sysfs_path (dev), target);
     if (!ppd_utils_write_sysfs (dev, DPM_SYSFS_NAME, target, error))
       return FALSE;
