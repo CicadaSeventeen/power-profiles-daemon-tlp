@@ -462,6 +462,8 @@ load_configuration (PpdApp *data)
   data->config = g_key_file_new ();
   if (!g_key_file_load_from_file (data->config, data->config_path, G_KEY_FILE_KEEP_COMMENTS, &error))
     g_debug ("Could not load configuration file '%s': %s", data->config_path, error->message);
+  else
+    g_debug ("Loaded configuration file '%s'", data->config_path);
 }
 
 static void
