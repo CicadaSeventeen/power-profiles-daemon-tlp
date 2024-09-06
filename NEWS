@@ -1,3 +1,9 @@
+0.23
+----
+
+Bugfix release for a performance regression with users who manually
+adjusted AMD dGPU settings using other software.
+
 0.22
 ----
 
