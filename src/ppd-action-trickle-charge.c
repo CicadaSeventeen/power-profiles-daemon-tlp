@@ -39,6 +39,8 @@ ppd_action_trickle_charge_constructor (GType                  type,
                                                                                 construct_params);
   g_object_set (object,
                 "action-name", "trickle_charge",
+                "action-description", "Configure power supply to trickle charge",
+                "action-optin", FALSE,
                 NULL);
 
   return object;
