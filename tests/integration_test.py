@@ -478,6 +478,26 @@ class Tests(dbusmock.DBusTestCase):
             + f"'{self.get_dbus_property(prop)}'",
         )
 
+    def _assert_action_boolean(self, name, value):
+        for action in self.get_dbus_property("Actions"):
+            if action["Name"] != name:
+                continue
+            self.assertEqual(action["Enabled"], value)
+
+    def assert_action_disabled(self, name):
+        """Assert that a PPD action is disabled"""
+        if self.PP_INTERFACE == "org.freedesktop.UPower.PowerProfiles":
+            self._assert_action_boolean(name, False)
+        else:
+            self.assertNotIn(name, self.get_dbus_property("Actions"))
+
+    def assert_action_enabled(self, name):
+        """Assert that a PPD action is enabled"""
+        if self.PP_INTERFACE == "org.freedesktop.UPower.PowerProfiles":
+            self._assert_action_boolean(name, True)
+        else:
+            self.assertIn(name, self.get_dbus_property("Actions"))
+
     #
     # Actual test cases
     #
