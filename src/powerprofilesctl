@@ -166,6 +166,16 @@ def _launch(args):
     sys.exit(ret)
 
 
+@command
+def _list_actions(_args):
+    actions = get_profiles_property("ActionsInfo")
+    for action in actions:
+        for key in action:
+            print(f"{key}: {action[key]}")
+        if action != actions[-1]:
+            print("")
+
+
 def get_parser():
     parser = argparse.ArgumentParser(
         epilog="Use “powerprofilesctl COMMAND --help” to get detailed help for individual commands",
@@ -177,6 +187,10 @@ def get_parser():
         "list-holds", help="List current power profile holds"
     )
     parser_list_holds.set_defaults(func=_list_holds)
+    parser_list_actions = subparsers.add_parser(
+        "list-actions", help="List available power profile actions"
+    )
+    parser_list_actions.set_defaults(func=_list_actions)
     parser_get = subparsers.add_parser(
         "get", help="Print the currently active power profile"
     )

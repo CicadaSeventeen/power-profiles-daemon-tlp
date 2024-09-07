@@ -278,7 +278,7 @@ get_profiles_variant (PpdApp *data)
 }
 
 static GVariant *
-get_actions_variant (PpdApp *data)
+get_legacy_actions_variant (PpdApp *data)
 {
   GVariantBuilder builder;
   guint i;
@@ -293,6 +293,32 @@ get_actions_variant (PpdApp *data)
 
   return g_variant_builder_end (&builder);
 }
+
+static GVariant *
+get_modern_actions_variant (PpdApp *data)
+{
+  GVariantBuilder builder;
+  guint i;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
+
+  for (i = 0; i < data->actions->len; i++) {
+    PpdAction *action = g_ptr_array_index (data->actions, i);
+    GVariantBuilder asv_builder;
+
+    g_variant_builder_init (&asv_builder, G_VARIANT_TYPE ("a{sv}"));
+    g_variant_builder_add (&asv_builder, "{sv}", "Name",
+                            g_variant_new_string (ppd_action_get_action_name (action)));
+    g_variant_builder_add (&asv_builder, "{sv}", "Description",
+                            g_variant_new_string (ppd_action_get_action_description (action)));
+    g_variant_builder_add (&asv_builder, "{sv}", "Enabled",
+                            g_variant_new_boolean (ppd_action_get_active (action)));
+    g_variant_builder_add (&builder, "a{sv}", &asv_builder);
+  }
+
+  return g_variant_builder_end (&builder);
+}
+
 
 static GVariant *
 get_profile_holds_variant (PpdApp *data)
@@ -357,8 +383,12 @@ send_dbus_event_iface (PpdApp         *data,
                            get_profiles_variant (data));
   }
   if (mask & PROP_ACTIONS) {
-    g_variant_builder_add (&props_builder, "{sv}", "Actions",
-                           get_actions_variant (data));
+    if (g_str_equal (iface, POWER_PROFILES_IFACE_NAME))
+      g_variant_builder_add (&props_builder, "{sv}", "Actions",
+                             get_modern_actions_variant (data));
+    else
+      g_variant_builder_add (&props_builder, "{sv}", "Actions",
+                             get_legacy_actions_variant (data));
   }
   if (mask & PROP_ACTIVE_PROFILE_HOLDS) {
     g_variant_builder_add (&props_builder, "{sv}", "ActiveProfileHolds",
@@ -872,8 +902,12 @@ handle_get_property (GDBusConnection *connection,
     return g_variant_new_string ("");
   if (g_strcmp0 (property_name, "Profiles") == 0)
     return get_profiles_variant (data);
-  if (g_strcmp0 (property_name, "Actions") == 0)
-    return get_actions_variant (data);
+  if (g_str_equal (property_name, "Actions")) {
+    if (g_strcmp0 (interface_name, POWER_PROFILES_IFACE_NAME) == 0)
+      return get_modern_actions_variant (data);
+    else
+      return get_legacy_actions_variant (data);
+  }
   if (g_strcmp0 (property_name, "PerformanceDegraded") == 0) {
     gchar *degraded = get_performance_degraded (data);
     return g_variant_new_take_string (g_steal_pointer (&degraded));
