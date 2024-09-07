@@ -28,4 +28,14 @@
     </defaults>
   </action>
 
+  <action id="org.freedesktop.UPower.PowerProfiles.configure-action">
+    <description>Configure action</description>
+    <message>Privileges are required to configure actions.</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
 </policyconfig>

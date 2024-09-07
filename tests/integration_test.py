@@ -147,6 +147,7 @@ class Tests(dbusmock.DBusTestCase):
             [
                 "org.freedesktop.UPower.PowerProfiles.switch-profile",
                 "org.freedesktop.UPower.PowerProfiles.hold-profile",
+                "org.freedesktop.UPower.PowerProfiles.configure-action",
             ]
         )
 
@@ -479,7 +480,7 @@ class Tests(dbusmock.DBusTestCase):
         )
 
     def _assert_action_boolean(self, name, value):
-        for action in self.get_dbus_property("Actions"):
+        for action in self.get_dbus_property("ActionsInfo"):
             if action["Name"] != name:
                 continue
             self.assertEqual(action["Enabled"], value)
@@ -1644,7 +1645,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        self.assertIn("amdgpu_dpm", self.get_dbus_property("Actions"))
+        self.assert_action_enabled("amdgpu_dpm")
 
         self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("balanced"))
         self.assert_sysfs_attr_eventually_is(card, amdgpu_dpm, "manual")
@@ -1666,7 +1667,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        self.assertIn("amdgpu_dpm", self.get_dbus_property("Actions"))
+        self.assert_action_enabled("amdgpu_dpm")
 
         self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("balanced"))
         self.assert_sysfs_attr_eventually_is(card, amdgpu_dpm, "auto")
@@ -1689,7 +1690,14 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        self.assertIn("amdgpu_panel_power", self.get_dbus_property("Actions"))
+        # verify it starts off disabled
+        self.assert_action_disabled("amdgpu_panel_power")
+
+        # verify it is now enabled
+        self.call_dbus_method(
+            "SetActionEnabled", GLib.Variant("(sb)", ("amdgpu_panel_power", True))
+        )
+        self.assert_action_enabled("amdgpu_panel_power")
 
         # verify it hasn't been updated yet due to missing upower
         self.assert_sysfs_attr_eventually_is(edp, amdgpu_panel_power_savings, "0")
@@ -1709,6 +1717,10 @@ class Tests(dbusmock.DBusTestCase):
 
         set_battery_level(50)
         self.start_daemon()
+
+        self.call_dbus_method(
+            "SetActionEnabled", GLib.Variant("(sb)", ("amdgpu_panel_power", True))
+        )
 
         # verify balanced has it off at half battery
         self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("balanced"))
@@ -1768,7 +1780,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        self.assertIn("trickle_charge", self.get_dbus_property("Actions"))
+        self.assert_action_enabled("trickle_charge")
 
         # Verify that charge-type stays untouched
         self.assertEqual(self.read_sysfs_attr(fastcharge, "charge_type"), b"Trickle")
@@ -1790,7 +1802,7 @@ class Tests(dbusmock.DBusTestCase):
         mtime = self.get_mtime(fastcharge, "charge_type")
         self.start_daemon()
 
-        self.assertIn("trickle_charge", self.get_dbus_property("Actions"))
+        self.assert_action_enabled("trickle_charge")
 
         # Verify that charge-type didn't get touched
         self.assert_sysfs_attr_eventually_is(fastcharge, "charge_type", "Fast")
@@ -1816,7 +1828,7 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
-        self.assertIn("trickle_charge", self.get_dbus_property("Actions"))
+        self.assert_action_enabled("trickle_charge")
 
         # Verify that charge-type got changed to Fast on startup
         self.assert_sysfs_attr_eventually_is(fastcharge, "charge_type", "Fast")
@@ -2579,6 +2591,30 @@ class LegacyDBusNameTests(Tests):
         # Let's not block because of this CI failure, the test isn't relying on
         # the old name anyways.
         pass
+
+    def test_amdgpu_panel_power(self):
+        amdgpu_panel_power_savings = "amdgpu/panel_power_savings"
+        self.testbed.add_device(
+            "drm",
+            "card1-eDP",
+            None,
+            ["status", "connected\n", amdgpu_panel_power_savings, "0"],
+            ["DEVTYPE", "drm_connector"],
+        )
+
+        self.create_amd_apu()
+
+        self.start_daemon()
+
+        # verify it starts off disabled
+        self.assert_action_disabled("amdgpu_panel_power")
+
+        # verify can't enable it on legacy interface
+        with self.assertRaises(gi.repository.GLib.GError) as error:
+            self.call_dbus_method(
+                "SetActionEnabled", GLib.Variant("(sb)", ("amdgpu_panel_power", True))
+            )
+        self.assertIn("UnknownMethod", str(error.exception))
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ foreach name, path: bus_names
   }
 
   xml_source = configure_file(
-    input: 'power-profiles-daemon.dbus.xml.in',
+    input: name + '.xml.in',
     output: name + '.xml',
     configuration: config,
   )

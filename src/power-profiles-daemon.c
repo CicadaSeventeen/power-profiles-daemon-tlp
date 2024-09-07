@@ -914,12 +914,11 @@ handle_get_property (GDBusConnection *connection,
     return g_variant_new_string ("");
   if (g_strcmp0 (property_name, "Profiles") == 0)
     return get_profiles_variant (data);
-  if (g_str_equal (property_name, "Actions")) {
-    if (g_strcmp0 (interface_name, POWER_PROFILES_IFACE_NAME) == 0)
+  if (g_str_equal (property_name, "ActionsInfo") &&
+      g_str_equal (interface_name, POWER_PROFILES_IFACE_NAME))
       return get_modern_actions_variant (data);
-    else
+  if (g_str_equal (property_name, "Actions"))
       return get_legacy_actions_variant (data);
-  }
   if (g_strcmp0 (property_name, "PerformanceDegraded") == 0) {
     gchar *degraded = get_performance_degraded (data);
     return g_variant_new_take_string (g_steal_pointer (&degraded));
@@ -962,6 +961,29 @@ handle_set_property (GDBusConnection  *connection,
   return set_active_profile (data, profile, error);
 }
 
+static gboolean set_action_enabled (PpdApp                *data,
+                                    GVariant              *parameters,
+                                    GError                **error)
+{
+  const char *action_name;
+  gboolean active;
+
+  g_variant_get (parameters, "(&sb)", &action_name, &active);
+
+  for (guint i = 0; i < data->actions->len; i++) {
+    PpdAction *action = g_ptr_array_index (data->actions, i);
+
+    if (g_strcmp0 (ppd_action_get_action_name (action), action_name) == 0) {
+      g_key_file_set_boolean (data->config, "Actions", action_name, active);
+      restart_profile_drivers_for_default_app ();
+      return TRUE;
+    }
+  }
+  g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS,
+               "No such action '%s'", action_name);
+  return FALSE;
+}
+
 static void
 handle_method_call (GDBusConnection       *connection,
                     const gchar           *sender,
@@ -994,6 +1016,26 @@ handle_method_call (GDBusConnection       *connection,
     hold_profile (data, parameters, invocation);
   } else if (g_strcmp0 (method_name, "ReleaseProfile") == 0) {
     release_profile (data, parameters, invocation);
+  } else if (g_strcmp0 (method_name, "SetActionEnabled") == 0) {
+    g_autoptr(GError) local_error = NULL;
+    if (g_str_equal (interface_name, POWER_PROFILES_LEGACY_IFACE_NAME)) {
+      g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD,
+                                             "Method %s is not available in interface %s", method_name,
+                                             interface_name);
+      return;
+    }
+    if (!check_action_permission (data,
+                                  g_dbus_method_invocation_get_sender (invocation),
+                                  POWER_PROFILES_POLICY_NAMESPACE ".configure-action",
+                                  &local_error)) {
+      g_dbus_method_invocation_return_gerror (invocation, local_error);
+      return;
+    }
+    if (!set_action_enabled (data, parameters, &local_error)) {
+      g_dbus_method_invocation_return_gerror (invocation, local_error);
+      return;
+    }
+    g_dbus_method_invocation_return_value (invocation, NULL);
   } else {
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD,
                                              "No such method %s in interface %s", interface_name,
