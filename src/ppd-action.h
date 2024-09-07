@@ -49,4 +49,9 @@ gboolean ppd_action_activate_profile (PpdAction *action, PpdProfile profile, GEr
 gboolean ppd_action_power_changed (PpdAction *action, PpdPowerChangedReason reason, GError **error);
 gboolean ppd_action_battery_changed (PpdAction *action, gdouble val, GError **error);
 const char *ppd_action_get_action_name (PpdAction *action);
+const char *ppd_action_get_action_description (PpdAction *action);
+void ppd_action_set_active (PpdAction *action,
+                            gboolean   active);
+gboolean ppd_action_get_active (PpdAction *action);
+gboolean ppd_action_get_optin (PpdAction *action);
 #endif

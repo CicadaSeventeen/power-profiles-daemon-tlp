@@ -38,12 +38,17 @@
 typedef struct
 {
   char          *action_name;
+  char          *action_description;
+  gboolean       optin;
+  gboolean       active;
   PpdProfile     profile;
 } PpdActionPrivate;
 
 enum {
   PROP_0,
-  PROP_ACTION_NAME
+  PROP_ACTION_NAME,
+  PROP_ACTION_DESCRIPTION,
+  PROP_ACTION_OPTIN,
 };
 
 #define PPD_ACTION_GET_PRIVATE(o) (ppd_action_get_instance_private (o))
@@ -63,6 +68,13 @@ ppd_action_set_property (GObject        *object,
     g_return_if_fail (priv->action_name == NULL);
     priv->action_name = g_value_dup_string (value);
     break;
+  case PROP_ACTION_DESCRIPTION:
+    g_return_if_fail (priv->action_description == NULL);
+    g_set_str (&priv->action_description, g_value_get_string (value));
+    break;
+  case PROP_ACTION_OPTIN:
+    priv->optin = g_value_get_boolean (value);
+    break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
   }
@@ -81,6 +93,12 @@ ppd_action_get_property (GObject        *object,
   case PROP_ACTION_NAME:
     g_value_set_string (value, priv->action_name);
     break;
+  case PROP_ACTION_DESCRIPTION:
+    g_value_set_string (value, priv->action_description);
+    break;
+  case PROP_ACTION_OPTIN:
+    g_value_set_boolean (value, priv->optin);
+    break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
   }
@@ -93,6 +111,7 @@ ppd_action_finalize (GObject *object)
 
   priv = PPD_ACTION_GET_PRIVATE (PPD_ACTION (object));
   g_clear_pointer (&priv->action_name, g_free);
+  g_clear_pointer (&priv->action_description, g_free);
 
   G_OBJECT_CLASS (ppd_action_parent_class)->finalize (object);
 }
@@ -117,6 +136,29 @@ ppd_action_class_init (PpdActionClass *klass)
                                                        "Action name",
                                                        "Action name",
                                                        NULL,
+                                                       G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+  /**
+   * PpdAction::action-description:
+   *
+   * A unique action description, only used for debugging.
+   */
+  g_object_class_install_property (object_class, PROP_ACTION_DESCRIPTION,
+                                   g_param_spec_string ("action-description",
+                                                       "Action description",
+                                                       "Action description",
+                                                       NULL,
+                                                       G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+
+  /**
+   * PpdAction::optin:
+   *
+   * Whether the action is opt-in or not.
+   */
+  g_object_class_install_property (object_class, PROP_ACTION_OPTIN,
+                                   g_param_spec_boolean ("action-optin",
+                                                         "Opt-in",
+                                                         "Whether the action is opt-in or not",
+                                                         FALSE,
                                                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 }
 
@@ -182,4 +224,49 @@ ppd_action_get_action_name (PpdAction *action)
 
   priv = PPD_ACTION_GET_PRIVATE (action);
   return priv->action_name;
+}
+
+const char *
+ppd_action_get_action_description (PpdAction *action)
+{
+  PpdActionPrivate *priv;
+
+  g_return_val_if_fail (PPD_IS_ACTION (action), NULL);
+
+  priv = PPD_ACTION_GET_PRIVATE (action);
+  return priv->action_description;
+}
+
+void
+ppd_action_set_active (PpdAction *action,
+                       gboolean   active)
+{
+  PpdActionPrivate *priv;
+
+  g_return_if_fail (PPD_IS_ACTION (action));
+
+  priv = PPD_ACTION_GET_PRIVATE (action);
+  priv->active = active;
+}
+
+gboolean
+ppd_action_get_active (PpdAction *action)
+{
+  PpdActionPrivate *priv;
+
+  g_return_val_if_fail (PPD_IS_ACTION (action), FALSE);
+
+  priv = PPD_ACTION_GET_PRIVATE (action);
+  return priv->active;
+}
+
+gboolean
+ppd_action_get_optin (PpdAction *action)
+{
+  PpdActionPrivate *priv;
+
+  g_return_val_if_fail (PPD_IS_ACTION (action), FALSE);
+
+  priv = PPD_ACTION_GET_PRIVATE (action);
+  return priv->optin;
 }
