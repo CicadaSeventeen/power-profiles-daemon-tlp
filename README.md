@@ -25,11 +25,11 @@ mode power-profiles-daemon will attempt to make changes to boost performance whe
 needed. In "performance" mode performance will be maximized at the expense of power.
 
 In addition to those 2 or 3 modes (depending on the system), "actions" can be hooked
-up to change the behaviour of a particular device. For example, this can be used
+up to change the behavior of a particular device. For example, this can be used
 to disable the fast-charging for some USB devices when in power-saver mode.
 
 GNOME's Settings and shell both include interfaces to select the current mode, but
-they are also expected to adjust the behaviour of the desktop depending on the mode,
+they are also expected to adjust the behavior of the desktop depending on the mode,
 such as turning the screen off after inaction more aggressively when in power-saver
 mode.
 
@@ -54,6 +54,21 @@ powerprofilesctl launch make
 If you're a developer, you might also want to use GLib's [`GPowerProfileMonitor`](https://docs.gtk.org/gio/iface.PowerProfileMonitor.html)
 through C, or one of its bindings, so your application can react to the user requesting
 a low-power mode.
+
+## Configuring actions
+
+Some users may have preferences to disable some actions or enable others. For example, some users may want to disable the panel power savings on AMD-based machines. Actions available are discovered by running:
+
+  ```sh
+  powerprofilesctl list-actions
+  ```
+
+Actions can be enabled or disabled by running:
+
+  ```sh
+  powerprofilesctl configure-action <action> --enable
+  powerprofilesctl configure-action <action> --disable
+  ```
 
 ## Conflicts
 
@@ -178,15 +193,11 @@ to decrease panel power consumption in exchange for color accuracy. This
 function is used when the system is on battery and the user has selected
 the "balanced" or "power-saver" profiles.
 
-If you decide that you don't like how this behaves, you can disable the function
-in one of two ways:
+This is disabled by default, but can be enabled by running:
 
-1. Adding `amdgpu.abmlevel=0` to the kernel command line.  This will disable abm
-   value changes entirely.
-2. By using `--block-action=amdgpu_panel_power` in the
-   `power-profiles-daemon` `ExecStart` command. This will allow you to
-   still change values manually in sysfs but `power-profiles-daemon` will not
-   change anything.
+```sh
+powerprofilesctl configure-action amdgpu_panel_power --enable
+```
 
 ## Multiple driver and multiple action operations
 
@@ -309,7 +320,7 @@ addition to the "3 profiles" selection:
 - implements charging limits for batteries
 - implements some power saving tricks, which could also be implemented
 
-A lot of those power-saving tricks could be analysed and used, but we
+A lot of those power-saving tricks could be analyzed and used, but we
 obviously can't rely on "source available" software for our free desktops.
 
 ### [system76-power](https://github.com/pop-os/system76-power)
