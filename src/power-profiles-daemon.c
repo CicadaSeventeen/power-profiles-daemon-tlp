@@ -287,6 +287,8 @@ get_legacy_actions_variant (PpdApp *data)
 
   for (i = 0; i < data->actions->len; i++) {
     PpdAction *action = g_ptr_array_index (data->actions, i);
+    if (!ppd_action_get_active (action))
+      continue;
 
     g_variant_builder_add (&builder, "s", ppd_action_get_action_name (action));
   }
@@ -441,6 +443,13 @@ save_configuration (PpdApp *data)
   g_key_file_set_string (data->config, "State", "Profile",
                          ppd_profile_to_str (data->active_profile));
 
+  for (guint i = 0; i < data->actions->len; i++) {
+    PpdAction *action = g_ptr_array_index (data->actions, i);
+    g_key_file_set_boolean (data->config, "Actions",
+                            ppd_action_get_action_name (action),
+                            ppd_action_get_active (action));
+  }
+
   if (!g_key_file_save_to_file (data->config, data->config_path, &error))
     g_warning ("Could not save configuration file '%s': %s", data->config_path, error->message);
 }
@@ -509,6 +518,9 @@ actions_activate_profile (GPtrArray *actions,
     PpdAction *action;
 
     action = g_ptr_array_index (actions, i);
+
+    if (!ppd_action_get_active (action))
+      continue;
 
     if (!ppd_action_activate_profile (action, profile, &error))
       g_warning ("Failed to activate action '%s' to profile %s: %s",
@@ -1105,6 +1117,9 @@ upower_battery_changed (PpdApp *data, gdouble level)
 
     action = g_ptr_array_index (data->actions, i);
 
+    if (!ppd_action_get_active (action))
+      continue;
+
     if (!ppd_action_battery_changed (action, level, &error)) {
       g_warning ("failed to update action %s: %s",
                  ppd_action_get_action_name (action),
@@ -1183,6 +1198,9 @@ upower_battery_set_power_changed_reason (PpdApp                *data,
     PpdAction *action;
 
     action = g_ptr_array_index (data->actions, i);
+
+    if (!ppd_action_get_active (action))
+      continue;
 
     if (!ppd_action_power_changed (action, reason, &error)) {
       g_warning ("failed to update action %s: %s",
@@ -1433,15 +1451,30 @@ static gboolean
 action_blocked (PpdApp *app, PpdAction *action)
 {
   const gchar *action_name = ppd_action_get_action_name (action);
+  g_autoptr(GError) error = NULL;
   gboolean blocked;
 
-  if (app->debug_options->blocked_actions == NULL || g_strv_length (app->debug_options->blocked_actions) == 0)
-    return FALSE;
+  if (app->debug_options->blocked_actions != NULL &&
+      g_strv_length (app->debug_options->blocked_actions) != 0) {
 
-  blocked = g_strv_contains ((const gchar *const *) app->debug_options->blocked_actions, action_name);
+    blocked = g_strv_contains ((const gchar *const *) app->debug_options->blocked_actions, action_name);
 
-  if (blocked)
-    g_debug ("Action '%s' is blocked", action_name);
+    if (blocked) {
+      g_debug ("Action '%s' is blocked by command line", action_name);
+      return TRUE;
+    }
+  }
+
+  blocked = !g_key_file_get_boolean (app->config, "Actions", action_name, &error);
+
+  /* if not in conffile, fallback to action opt-in */
+  if (error != NULL) {
+    blocked = ppd_action_get_optin (action);
+    g_debug ("Action '%s' is set %s by default", action_name, blocked ? "disabled" : "enabled");
+    return blocked;
+  }
+
+  g_debug ("Action '%s' is %s by configuration", action_name, blocked ? "disabled" : "enabled");
   return blocked;
 }
 
@@ -1554,14 +1587,16 @@ start_profile_drivers (PpdApp *data)
       g_debug ("Handling action '%s'", ppd_action_get_action_name (action));
 
       if (action_blocked (data, action)) {
-        g_debug ("Action '%s' is blocked, skipping", ppd_action_get_action_name (action));
-        continue;
-      }
-
-      if (ppd_action_probe (action) == PPD_PROBE_RESULT_FAIL) {
-        g_debug ("probe () failed for action '%s', skipping",
-                 ppd_action_get_action_name (action));
-        continue;
+          ppd_action_set_active (action, FALSE);
+      } else {
+        switch (ppd_action_probe(action)) {
+        case PPD_PROBE_RESULT_SUCCESS:
+          ppd_action_set_active (action, TRUE);
+          break;
+        default:
+          ppd_action_set_active (action, FALSE);
+          break;
+        }
       }
 
       if (PPD_ACTION_GET_CLASS (action)->power_changed != NULL)
@@ -1570,7 +1605,9 @@ start_profile_drivers (PpdApp *data)
       if (PPD_ACTION_GET_CLASS (action)->battery_changed != NULL)
         needs_battery_change_monitor = TRUE;
 
-      g_info ("Action '%s' loaded", ppd_action_get_action_name (action));
+      g_info ("Action '%s' active %d",
+              ppd_action_get_action_name (action),
+              ppd_action_get_active (action));
       g_ptr_array_add (data->actions, g_steal_pointer (&action));
       continue;
     }
