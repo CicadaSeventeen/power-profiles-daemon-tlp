@@ -2475,6 +2475,37 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(len(profiles), 3)
         self.assertEqual(self.get_dbus_property("PerformanceDegraded"), "")
 
+    def test_powerprofilesctl_configure_action_command(self):
+        """Check powerprofilesctl configure-action command works"""
+
+        self.start_daemon()
+
+        for key, value in {"--disable": "False", "--enable": "True"}.items():
+            with self.subTest(flag=key):
+                cmd = subprocess.run(
+                    self.powerprofilesctl_command()
+                    + ["configure-action", "trickle_charge", key],
+                    capture_output=True,
+                    check=True,
+                )
+            self.assertEqual(cmd.returncode, 0)
+            self.assertIn(
+                f"action: trickle_charge, enable: {value}", cmd.stdout.decode("utf-8")
+            )
+
+    def test_powerprofilesctl_list_actions_command(self):
+        """Check powerprofilesctl list-actions command works"""
+
+        self.start_daemon()
+
+        cmd = subprocess.run(
+            self.powerprofilesctl_command() + ["list-actions"],
+            capture_output=True,
+            check=True,
+        )
+        self.assertEqual(cmd.returncode, 0)
+        self.assertIn("trickle_charge", cmd.stdout.decode("utf-8"))
+
     def test_powerprofilesctl_version_command(self):
         """Check powerprofilesctl version command works"""
 
