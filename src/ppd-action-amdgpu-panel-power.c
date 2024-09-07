@@ -58,6 +58,8 @@ ppd_action_amdgpu_panel_power_constructor (GType                  type,
                                                                                      construct_params);
   g_object_set (object,
                 "action-name", "amdgpu_panel_power",
+                "action-description", "Panel Power Savings (may affect color quality)",
+                "action-optin", TRUE,
                 NULL);
 
   return object;
