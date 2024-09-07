@@ -956,24 +956,8 @@ class Tests(dbusmock.DBusTestCase):
 
     def test_action_blocklist(self):
         """Test action blocklist works"""
-        self.testbed.add_device(
-            "drm",
-            "card1-eDP",
-            None,
-            ["amdgpu/panel_power_savings", "0"],
-            ["DEVTYPE", "drm_connector"],
-        )
-
-        self.create_amd_apu()
-
-        self.start_dbus_template(
-            "upower",
-            {"DaemonVersion": "0.99", "OnBattery": False},
-        )
-
-        # Block panel_power action
-        self.start_daemon(["--block-action", "amdgpu_panel_power"])
-        self.assertNotIn("amdgpu_panel_power", self.get_dbus_property("Actions"))
+        self.start_daemon(["--block-action", "trickle_charge"])
+        self.assert_action_disabled("trickle_charge")
 
     def test_driver_blocklist(self):
         """Test driver blocklist works"""
