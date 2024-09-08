@@ -199,6 +199,17 @@ This is disabled by default, but can be enabled by running:
 powerprofilesctl configure-action amdgpu_panel_power --enable
 ```
 
+### AMDGPU Dynamic power management
+
+The AMDGPU driver has a feature called Dynamic power management that can be [manipulated](https://www.kernel.org/doc/html/v6.10/gpu/amdgpu/thermal.html#power-dpm-force-performance-level) to force clocks to a lower state when the user has selected the "power-saver" profile.
+
+This action is not enabled by default, and if desired can be
+enabled using `powerprofilesctl`:
+
+```sh
+powerprofilesctl configure-action amdgpu_dpm --enable
+```
+
 ## Multiple driver and multiple action operations
 
 Power-profiles daemon will load all supported drivers and actions by default.
