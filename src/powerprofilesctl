@@ -186,7 +186,7 @@ def get_parser():
     parser_launch = subparsers.add_parser(
         "launch",
         help="Launch a command while holding a power profile",
-        description="Launch the command while holding a power profile,"
+        description="Launch the command while holding a power profile, "
         "either performance, or power-saver. By default, the profile hold "
         "is for the performance profile, but it might not be available on "
         "all systems. See the list command for a list of available profiles.",
