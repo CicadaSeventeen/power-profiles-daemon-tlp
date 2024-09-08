@@ -51,7 +51,7 @@ ppd_action_amdgpu_dpm_constructor (GType                  type,
   g_object_set (object,
                 "action-name", "amdgpu_dpm",
                 "action-description", "Adjust GPU dynamic power management",
-                "action-optin", FALSE,
+                "action-optin", TRUE,
                 NULL);
 
   return object;

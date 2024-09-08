@@ -1645,6 +1645,10 @@ class Tests(dbusmock.DBusTestCase):
 
         self.start_daemon()
 
+        self.call_dbus_method(
+            "SetActionEnabled", GLib.Variant("(sb)", ("amdgpu_dpm", True))
+        )
+
         self.assert_action_enabled("amdgpu_dpm")
 
         self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("balanced"))
@@ -1666,6 +1670,10 @@ class Tests(dbusmock.DBusTestCase):
         self.create_amd_apu()
 
         self.start_daemon()
+
+        self.call_dbus_method(
+            "SetActionEnabled", GLib.Variant("(sb)", ("amdgpu_dpm", True))
+        )
 
         self.assert_action_enabled("amdgpu_dpm")
 
@@ -2622,6 +2630,30 @@ class LegacyDBusNameTests(Tests):
         # Let's not block because of this CI failure, the test isn't relying on
         # the old name anyways.
         pass
+
+    def test_amdgpu_dpm(self):
+        amdgpu_dpm = "device/power_dpm_force_performance_level"
+        self.testbed.add_device(
+            "drm",
+            "card0",
+            None,
+            [amdgpu_dpm, "auto\n"],
+            ["DEVTYPE", "drm_minor"],
+        )
+        self.create_amd_apu()
+
+        self.start_daemon()
+
+        # verify can't enable it on legacy interface
+        with self.assertRaises(gi.repository.GLib.GError) as error:
+            self.call_dbus_method(
+                "SetActionEnabled", GLib.Variant("(sb)", ("amdgpu_dpm", True))
+            )
+        self.assertIn("UnknownMethod", str(error.exception))
+
+    def test_amdgpu_dpm_manual(self):
+        # should fail same way as test_amdgpu_dpm
+        self.test_amdgpu_dpm()
 
     def test_amdgpu_panel_power(self):
         amdgpu_panel_power_savings = "amdgpu/panel_power_savings"
