@@ -1003,11 +1003,6 @@ class Tests(dbusmock.DBusTestCase):
         )
         self.assertNotEqual(profile, None)
 
-        # desktop PM profile
-        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir3, exist_ok=True)
-        self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
-
         # block platform profile
         self.start_daemon(["--block-driver", "platform_profile"])
         # Verify that only amd-pstate is loaded
@@ -1061,11 +1056,6 @@ class Tests(dbusmock.DBusTestCase):
         profile = os.path.join(
             self.testbed.get_root_dir(), "sys/firmware/acpi/platform_profile"
         )
-
-        # desktop PM profile
-        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir3, exist_ok=True)
-        self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
 
         self.start_daemon()
 
@@ -1151,11 +1141,6 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
 
-        # desktop PM profile
-        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir3)
-        self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
-
         self.start_daemon()
 
         profiles = self.get_dbus_property("Profiles")
@@ -1223,11 +1208,6 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
 
-        # desktop PM profile
-        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir3)
-        self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
-
         self.start_daemon()
 
         profiles = self.get_dbus_property("Profiles")
@@ -1292,11 +1272,6 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
 
-        # desktop PM profile
-        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir3)
-        self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
-
         self.start_daemon()
 
         profiles = self.get_dbus_property("Profiles")
@@ -1348,11 +1323,6 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
 
-        # desktop PM profile
-        dir2 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir2)
-        self.write_file_contents(os.path.join(dir2, "pm_profile"), "1\n")
-
         self.start_dbus_template(
             "upower",
             {"DaemonVersion": "0.99", "OnBattery": False},
@@ -1394,11 +1364,6 @@ class Tests(dbusmock.DBusTestCase):
         # Make file non-writable to root
         self.change_immutable(pref_path, True)
 
-        # desktop PM profile
-        dir2 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir2)
-        self.write_file_contents(os.path.join(dir2, "pm_profile"), "1\n")
-
         self.start_daemon()
 
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "balanced")
@@ -1432,11 +1397,6 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "status"), "passive\n")
 
-        # desktop PM profile
-        dir2 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir2)
-        self.write_file_contents(os.path.join(dir2, "pm_profile"), "1\n")
-
         self.start_daemon()
 
         profiles = self.get_dbus_property("Profiles")
@@ -1453,44 +1413,6 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "power-saver")
 
         self.assert_file_eventually_contains(energy_prefs, "performance\n")
-
-    def test_amd_pstate_server(self):
-        # Create 2 CPUs with preferences
-        dir1 = os.path.join(
-            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy0/"
-        )
-        os.makedirs(dir1)
-        self.write_file_contents(os.path.join(dir1, "scaling_governor"), "powersave\n")
-        self.write_file_contents(
-            os.path.join(dir1, "energy_performance_preference"), "performance\n"
-        )
-        dir2 = os.path.join(
-            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy1/"
-        )
-        os.makedirs(dir2)
-        self.write_file_contents(os.path.join(dir2, "scaling_governor"), "powersave\n")
-        self.write_file_contents(
-            os.path.join(dir2, "energy_performance_preference"), "performance\n"
-        )
-
-        # Create AMD P-State configuration
-        pstate_dir = os.path.join(
-            self.testbed.get_root_dir(), "sys/devices/system/cpu/amd_pstate"
-        )
-        os.makedirs(pstate_dir)
-        self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
-
-        # server PM profile
-        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir3)
-        self.write_file_contents(os.path.join(dir3, "pm_profile"), "4\n")
-
-        self.start_daemon()
-
-        profiles = self.get_dbus_property("Profiles")
-        self.assertEqual(len(profiles), 2)
-        with self.assertRaises(KeyError):
-            print(profiles[0]["CpuDriver"])
 
     def test_dytc_performance_driver(self):
         """Lenovo DYTC performance driver"""
@@ -1579,11 +1501,6 @@ class Tests(dbusmock.DBusTestCase):
         )
         os.makedirs(pstate_dir)
         self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
-
-        # desktop PM profile
-        dir3 = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
-        os.makedirs(dir3)
-        self.write_file_contents(os.path.join(dir3, "pm_profile"), "1\n")
 
         _, _, stop_upowerd = self.start_dbus_template(
             "upower",
