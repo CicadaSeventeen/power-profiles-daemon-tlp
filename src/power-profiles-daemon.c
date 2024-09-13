@@ -880,6 +880,8 @@ handle_get_property (GDBusConnection *connection,
     return get_profile_holds_variant (data);
   if (g_strcmp0 (property_name, "Version") == 0)
     return g_variant_new_string (VERSION);
+  g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+               "Invalid property'%s'", property_name);
   return NULL;
 }
 

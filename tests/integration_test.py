@@ -534,6 +534,14 @@ class Tests(dbusmock.DBusTestCase):
 
         self.stop_daemon()
 
+    def test_invalid_property(self):
+        """Test behavior for requesting an invalid property"""
+
+        self.start_daemon()
+
+        with self.assertRaises(gi.repository.GLib.GError):
+            self.get_dbus_property("Foothebar")
+
     def test_inhibited_property(self):
         """Test that the inhibited property exists"""
 
