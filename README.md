@@ -70,6 +70,25 @@ Actions can be enabled or disabled by running:
   powerprofilesctl configure-action <action> --disable
   ```
 
+## Dynamic profile and action changes
+
+Some actions and profiles have the ability to respond to changes to the battery
+level and state of the AC adapter on the system.  These change events are triggered
+by upower.
+
+If you would prefer not let any of these dynamic changes happen you can disable
+upower support by running:
+
+  ```sh
+  powerprofilesctl configure-battery-aware --disable
+  ```
+
+If disabled, it can be re-renabled using:
+
+  ```sh
+  powerprofilesctl configure-battery-aware --enable
+  ```
+
 ## Conflicts
 
 If `power-profiles-daemon` refuses to start, it's likely that you have [a conflicting

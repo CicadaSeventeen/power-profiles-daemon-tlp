@@ -86,6 +86,7 @@ typedef struct {
   GPtrArray *actions;
   GHashTable *profile_holds;
 
+  gboolean battery_support;
   GDBusProxy *upower_proxy;
   GDBusProxy *upower_display_proxy;
   gulong upower_watch_id;
@@ -170,6 +171,7 @@ typedef enum {
   PROP_DEGRADED                   = 1 << 4,
   PROP_ACTIVE_PROFILE_HOLDS       = 1 << 5,
   PROP_VERSION                    = 1 << 6,
+  PROP_UPOWER                     = 1 << 7,
 } PropertiesMask;
 
 #define PROP_ALL (PROP_ACTIVE_PROFILE       | \
@@ -178,7 +180,8 @@ typedef enum {
                   PROP_ACTIONS              | \
                   PROP_DEGRADED             | \
                   PROP_ACTIVE_PROFILE_HOLDS | \
-                  PROP_VERSION)
+                  PROP_VERSION              | \
+                  PROP_UPOWER)
 
 static gboolean
 driver_profile_support (PpdDriver *driver,
@@ -287,6 +290,7 @@ get_legacy_actions_variant (PpdApp *data)
 
   for (i = 0; i < data->actions->len; i++) {
     PpdAction *action = g_ptr_array_index (data->actions, i);
+
     if (!ppd_action_get_active (action))
       continue;
 
@@ -310,11 +314,11 @@ get_modern_actions_variant (PpdApp *data)
 
     g_variant_builder_init (&asv_builder, G_VARIANT_TYPE ("a{sv}"));
     g_variant_builder_add (&asv_builder, "{sv}", "Name",
-                            g_variant_new_string (ppd_action_get_action_name (action)));
+                           g_variant_new_string (ppd_action_get_action_name (action)));
     g_variant_builder_add (&asv_builder, "{sv}", "Description",
-                            g_variant_new_string (ppd_action_get_action_description (action)));
+                           g_variant_new_string (ppd_action_get_action_description (action)));
     g_variant_builder_add (&asv_builder, "{sv}", "Enabled",
-                            g_variant_new_boolean (ppd_action_get_active (action)));
+                           g_variant_new_boolean (ppd_action_get_active (action)));
     g_variant_builder_add (&builder, "a{sv}", &asv_builder);
   }
 
@@ -400,6 +404,10 @@ send_dbus_event_iface (PpdApp         *data,
     g_variant_builder_add (&props_builder, "{sv}", "Version",
                            g_variant_new_string (VERSION));
   }
+  if (mask & PROP_UPOWER) {
+    g_variant_builder_add (&props_builder, "{sv}", "BatteryAware",
+                           g_variant_new_boolean (data->battery_support));
+  }
 
   props_changed = g_variant_new ("(s@a{sv}@as)", iface,
                                  g_variant_builder_end (&props_builder),
@@ -450,6 +458,8 @@ save_configuration (PpdApp *data)
                             ppd_action_get_active (action));
   }
 
+  g_key_file_set_boolean (data->config, "State", "battery_aware", data->battery_support);
+
   if (!g_key_file_save_to_file (data->config, data->config_path, &error))
     g_warning ("Could not save configuration file '%s': %s", data->config_path, error->message);
 }
@@ -460,7 +470,16 @@ apply_configuration (PpdApp *data)
   g_autofree char *platform_driver = NULL;
   g_autofree char *profile_str = NULL;
   g_autofree char *cpu_driver = NULL;
+  g_autoptr(GError) error = NULL;
   PpdProfile profile;
+
+  data->battery_support = g_key_file_get_boolean (data->config, "State", "battery_aware", &error);
+  if (error != NULL) {
+    g_debug("battery_aware key not found: %s, defaulting to TRUE", error->message);
+    data->battery_support = TRUE;
+    g_key_file_set_boolean (data->config, "State", "battery_aware", TRUE);
+    g_clear_error (&error);
+  }
 
   cpu_driver = g_key_file_get_string (data->config, "State", "CpuDriver", NULL);
   if (PPD_IS_DRIVER_CPU (data->cpu_driver) &&
@@ -620,6 +639,24 @@ release_all_profile_holds (PpdApp *data)
     g_bus_unwatch_name (cookie);
   }
   g_hash_table_remove_all (data->profile_holds);
+}
+
+static gboolean
+set_battery_support (PpdApp *data, gboolean battery_support, GError **error)
+{
+  if (data->battery_support == battery_support) {
+    g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                 "battery_aware is already set to %s", battery_support ? "TRUE" : "FALSE");
+    return FALSE;
+  }
+
+  data->battery_support = battery_support;
+  g_key_file_set_boolean (data->config, "State", "battery_aware", data->battery_support);
+  g_debug("battery_aware set to %s", data->battery_support ? "TRUE" : "FALSE");
+
+  restart_profile_drivers_for_default_app ();
+
+  return TRUE;
 }
 
 static gboolean
@@ -919,6 +956,8 @@ handle_get_property (GDBusConnection *connection,
       return get_modern_actions_variant (data);
   if (g_str_equal (property_name, "Actions"))
       return get_legacy_actions_variant (data);
+  if (g_str_equal (property_name, "BatteryAware"))
+      return g_variant_new_boolean (data->battery_support);
   if (g_strcmp0 (property_name, "PerformanceDegraded") == 0) {
     gchar *degraded = get_performance_degraded (data);
     return g_variant_new_take_string (g_steal_pointer (&degraded));
@@ -943,22 +982,33 @@ handle_set_property (GDBusConnection  *connection,
                      gpointer          user_data)
 {
   PpdApp *data = user_data;
-  const char *profile;
 
   g_return_val_if_fail (data->connection, FALSE);
 
-  if (g_strcmp0 (property_name, "ActiveProfile") != 0) {
-    g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
-                 "No such property: %s", property_name);
-    return FALSE;
-  }
-  if (!check_action_permission (data, sender,
-                                POWER_PROFILES_POLICY_NAMESPACE ".switch-profile",
-                                error))
-    return FALSE;
+  if (g_str_equal (property_name, "ActiveProfile")) {
+    const char *profile;
 
-  g_variant_get (value, "&s", &profile);
-  return set_active_profile (data, profile, error);
+    if (!check_action_permission (data, sender,
+                                  POWER_PROFILES_POLICY_NAMESPACE ".switch-profile",
+                                  error))
+      return FALSE;
+
+    g_variant_get (value, "&s", &profile);
+    return set_active_profile (data, profile, error);
+  } else if (g_str_equal (property_name, "BatteryAware")) {
+    if (!check_action_permission (data,
+                                  sender,
+                                  POWER_PROFILES_POLICY_NAMESPACE ".configure-battery-aware",
+                                  error)) {
+      return FALSE;
+    }
+
+    return set_battery_support (data, g_variant_get_boolean (value), error);
+  }
+
+  g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+               "No such property: %s", property_name);
+  return FALSE;
 }
 
 static gboolean set_action_enabled (PpdApp                *data,
@@ -1018,12 +1068,14 @@ handle_method_call (GDBusConnection       *connection,
     release_profile (data, parameters, invocation);
   } else if (g_strcmp0 (method_name, "SetActionEnabled") == 0) {
     g_autoptr(GError) local_error = NULL;
+
     if (g_str_equal (interface_name, POWER_PROFILES_LEGACY_IFACE_NAME)) {
       g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_UNKNOWN_METHOD,
                                              "Method %s is not available in interface %s", method_name,
                                              interface_name);
       return;
     }
+
     if (!check_action_permission (data,
                                   g_dbus_method_invocation_get_sender (invocation),
                                   POWER_PROFILES_POLICY_NAMESPACE ".configure-action",
@@ -1031,6 +1083,7 @@ handle_method_call (GDBusConnection       *connection,
       g_dbus_method_invocation_return_gerror (invocation, local_error);
       return;
     }
+
     if (!set_action_enabled (data, parameters, &local_error)) {
       g_dbus_method_invocation_return_gerror (invocation, local_error);
       return;
@@ -1671,7 +1724,10 @@ start_profile_drivers (PpdApp *data)
   send_dbus_event (data, PROP_ALL);
   data->was_started = TRUE;
 
-  if (data->debug_options->disable_upower) {
+  if (data->debug_options->disable_upower)
+    data->battery_support = FALSE;
+
+  if (!data->battery_support) {
     g_debug ("upower is disabled, let's skip it");
   } else if (needs_battery_state_monitor || needs_battery_change_monitor) {
     /* start watching for power changes */

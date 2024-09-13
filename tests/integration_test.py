@@ -148,6 +148,7 @@ class Tests(dbusmock.DBusTestCase):
                 "org.freedesktop.UPower.PowerProfiles.switch-profile",
                 "org.freedesktop.UPower.PowerProfiles.hold-profile",
                 "org.freedesktop.UPower.PowerProfiles.configure-action",
+                "org.freedesktop.UPower.PowerProfiles.configure-battery-aware",
             ]
         )
 
@@ -2482,6 +2483,52 @@ class Tests(dbusmock.DBusTestCase):
         profiles = self.get_dbus_property("Profiles")
         self.assertEqual(len(profiles), 3)
         self.assertEqual(self.get_dbus_property("PerformanceDegraded"), "")
+
+    def test_powerprofilesctl_configure_battery_aware_command(self):
+        """Check powerprofilesctl configure-battery-aware command works"""
+
+        self.start_dbus_template(
+            "upower",
+            {"DaemonVersion": "0.99", "OnBattery": False},
+        )
+
+        self.start_daemon()
+
+        # verify argument is required
+        cmd = subprocess.run(
+            self.powerprofilesctl_command() + ["configure-battery-aware"],
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(cmd.returncode, 1)
+
+        # check possible arguments
+        for key, value in {"--disable": "False", "--enable": "True"}.items():
+            cmd = subprocess.run(
+                self.powerprofilesctl_command() + ["configure-battery-aware", key],
+                capture_output=True,
+                check=True,
+            )
+            self.assertEqual(cmd.returncode, 0)
+
+            cmd = subprocess.run(
+                self.powerprofilesctl_command() + ["query-battery-aware"],
+                capture_output=True,
+                check=True,
+            )
+            self.assertEqual(cmd.returncode, 0)
+            self.assertIn(
+                f"Dynamic changes from charger and battery events: {value}",
+                cmd.stdout.decode("utf-8"),
+            )
+
+        # make sure can't be enabled twice
+        cmd = subprocess.run(
+            self.powerprofilesctl_command() + ["configure-battery-aware", "--enable"],
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(cmd.returncode, 1)
 
     def test_powerprofilesctl_configure_action_command(self):
         """Check powerprofilesctl configure-action command works"""

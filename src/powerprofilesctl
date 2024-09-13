@@ -48,6 +48,14 @@ def _version(_args):
 
 
 @command
+def _set_profile(args):
+    proxy = get_proxy()
+    proxy.Set(
+        "(ssv)", PP_IFACE, "ActiveProfile", GLib.Variant.new_string(args.profile[0])
+    )
+
+
+@command
 def _get(_args):
     proxy = get_proxy()
     profile = proxy.Get("(ss)", PP_IFACE, "ActiveProfile")
@@ -55,11 +63,16 @@ def _get(_args):
 
 
 @command
-def _set(args):
+def _set_battery_aware(args):
+    enable = args.enable
+    disable = args.disable
+    if enable is False and disable is True:
+        raise ValueError("enable or disable is required")
+    if enable is True and disable is False:
+        raise ValueError("can't set both enable and disable")
+    enable = enable if enable is not None else not disable
     proxy = get_proxy()
-    proxy.Set(
-        "(ssv)", PP_IFACE, "ActiveProfile", GLib.Variant.new_string(args.profile[0])
-    )
+    proxy.Set("(ssv)", PP_IFACE, "BatteryAware", GLib.Variant.new_boolean(enable))
 
 
 def get_profiles_property(prop):
@@ -167,6 +180,12 @@ def _launch(args):
 
 
 @command
+def _query_battery_aware(_args):
+    result = get_profiles_property("BatteryAware")
+    print(f"Dynamic changes from charger and battery events: {result}")
+
+
+@command
 def _list_actions(_args):
     actions = get_profiles_property("ActionsInfo")
     for action in actions:
@@ -225,7 +244,7 @@ def get_parser():
         help="Profile to use for set command",
         choices=get_profile_choices(),
     )
-    parser_set.set_defaults(func=_set)
+    parser_set.set_defaults(func=_set_profile)
     parser_set_action = subparsers.add_parser(
         "configure-action", help="Configure the action to be taken for the profile"
     )
@@ -245,6 +264,26 @@ def get_parser():
         help="disable action",
     )
     parser_set_action.set_defaults(func=_configure_action)
+    parser_set_battery_aware = subparsers.add_parser(
+        "configure-battery-aware",
+        help="Turn on or off dynamic changes from battery level or power adapter",
+    )
+    parser_set_battery_aware.add_argument(
+        "--enable",
+        action="store_true",
+        help="enable battery aware",
+    )
+    parser_set_battery_aware.add_argument(
+        "--disable",
+        action="store_false",
+        help="disable battery aware",
+    )
+    parser_set_battery_aware.set_defaults(func=_set_battery_aware)
+    parser_query_battery_aware = subparsers.add_parser(
+        "query-battery-aware",
+        help="Query if dynamic changes from battery level or power adapter are enabled",
+    )
+    parser_query_battery_aware.set_defaults(func=_query_battery_aware)
     parser_launch = subparsers.add_parser(
         "launch",
         help="Launch a command while holding a power profile",

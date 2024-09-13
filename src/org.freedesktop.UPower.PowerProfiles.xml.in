@@ -166,5 +166,13 @@
     -->
     <property name="Version" type="s" access="read"/>
 
+    <!--
+        BatteryAware:
+
+        Whether the daemon is using upower to detect battery and AC
+        adapter changes.
+    -->
+    <property name="BatteryAware" type="b" access="readwrite"/>
+
   </interface>
 </node>

@@ -144,10 +144,10 @@ ppd_action_class_init (PpdActionClass *klass)
    */
   g_object_class_install_property (object_class, PROP_ACTION_DESCRIPTION,
                                    g_param_spec_string ("action-description",
-                                                       "Action description",
-                                                       "Action description",
-                                                       NULL,
-                                                       G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+                                                        "Action description",
+                                                        "Action description",
+                                                        NULL,
+                                                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
   /**
    * PpdAction::optin:
@@ -159,7 +159,7 @@ ppd_action_class_init (PpdActionClass *klass)
                                                          "Opt-in",
                                                          "Whether the action is opt-in or not",
                                                          FALSE,
-                                                       G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+                                                         G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 }
 
 static void
