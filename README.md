@@ -201,10 +201,11 @@ For example to edit the unit:
 sudo systemctl edit power-profiles-daemon.service
 ```
 
-Then modify the Execstart line to the drop-in file:
+Then modify the ExecStart line in the drop-in file:
 
 ```text
 [Service]
+ExecStart=
 ExecStart=/usr/libexec/power-profiles-daemon --block-action=FOO
 ```
 
