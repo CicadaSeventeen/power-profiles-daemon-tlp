@@ -1113,6 +1113,58 @@ class Tests(dbusmock.DBusTestCase):
         )
 
     # pylint: disable=too-many-statements
+    def test_amd_pstate_state_machine(self):
+        # Create 2 CPUs with preferences
+        dir1 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy0/"
+        )
+        os.makedirs(dir1)
+        self.write_file_contents(os.path.join(dir1, "scaling_governor"), "powersave\n")
+        self.write_file_contents(
+            os.path.join(dir1, "energy_performance_preference"), "performance\n"
+        )
+        dir2 = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/cpufreq/policy1/"
+        )
+        os.makedirs(dir2)
+        self.write_file_contents(os.path.join(dir2, "scaling_governor"), "powersave\n")
+        self.write_file_contents(
+            os.path.join(dir2, "energy_performance_preference"), "performance\n"
+        )
+
+        # Create AMD P-State configuration
+        pstate_dir = os.path.join(
+            self.testbed.get_root_dir(), "sys/devices/system/cpu/amd_pstate"
+        )
+        os.makedirs(pstate_dir)
+        self.write_file_contents(os.path.join(pstate_dir, "status"), "active\n")
+
+        self.start_daemon()
+
+        profiles = self.get_dbus_property("Profiles")
+        self.assertEqual(len(profiles), 3)
+
+        self.assertEqual(profiles[0]["Driver"], "multiple")
+        self.assertEqual(profiles[0]["CpuDriver"], "amd_pstate")
+        self.assertEqual(profiles[0]["Profile"], "power-saver")
+
+        energy_prefs = os.path.join(dir2, "energy_performance_preference")
+        scaling_governor = os.path.join(dir2, "scaling_governor")
+
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+        self.assert_file_eventually_contains(scaling_governor, "powersave")
+
+        self.write_file_contents(os.path.join(pstate_dir, "status"), "passive\n")
+
+        # Set performance mode
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("performance"))
+        self.assertEqual(self.get_dbus_property("ActiveProfile"), "performance")
+
+        # ensure nothing changed
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
+        self.assert_file_eventually_contains(scaling_governor, "powersave")
+
+    # pylint: disable=too-many-statements
     def test_amd_pstate(self):
         """AMD P-State driver (no UPower)"""
 
@@ -1387,7 +1439,7 @@ class Tests(dbusmock.DBusTestCase):
         os.makedirs(dir1)
         self.write_file_contents(os.path.join(dir1, "scaling_governor"), "powersave\n")
         self.write_file_contents(
-            os.path.join(dir1, "energy_performance_preference"), "performance\n"
+            os.path.join(dir1, "energy_performance_preference"), "balance_performance\n"
         )
 
         # Create AMD P-State configuration
@@ -1400,19 +1452,19 @@ class Tests(dbusmock.DBusTestCase):
         self.start_daemon()
 
         profiles = self.get_dbus_property("Profiles")
-        self.assertEqual(len(profiles), 2)
-        self.assertEqual(profiles[0]["Driver"], "placeholder")
+        self.assertEqual(len(profiles), 3)
+        self.assertEqual(profiles[0]["Driver"], "multiple")
         self.assertEqual(profiles[0]["PlatformDriver"], "placeholder")
+        self.assertEqual(profiles[0]["CpuDriver"], "amd_pstate")
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "balanced")
 
-        energy_prefs = os.path.join(dir1, "energy_performance_preference")
-        self.assert_file_eventually_contains(energy_prefs, "performance\n")
-
         # Set performance mode
-        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("power-saver"))
-        self.assertEqual(self.get_dbus_property("ActiveProfile"), "power-saver")
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("performance"))
+        self.assertEqual(self.get_dbus_property("ActiveProfile"), "performance")
 
-        self.assert_file_eventually_contains(energy_prefs, "performance\n")
+        # Shouldn't have updated
+        energy_prefs = os.path.join(dir1, "energy_performance_preference")
+        self.assert_file_eventually_contains(energy_prefs, "balance_performance")
 
     def test_dytc_performance_driver(self):
         """Lenovo DYTC performance driver"""

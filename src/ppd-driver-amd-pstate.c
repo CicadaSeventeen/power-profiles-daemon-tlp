@@ -58,18 +58,12 @@ probe_epp (PpdDriverAmdPstate *pstate)
   g_autoptr(GDir) dir = NULL;
   g_autofree char *policy_dir = NULL;
   g_autofree char *pstate_status_path = NULL;
-  g_autofree char *status = NULL;
   const char *dirname;
 
   /* Verify that AMD P-State is running in active mode */
   pstate_status_path = ppd_utils_get_sysfs_path (PSTATE_STATUS_PATH);
-  if (!g_file_get_contents (pstate_status_path, &status, NULL, NULL))
+  if (!g_file_test (pstate_status_path, G_FILE_TEST_EXISTS))
     return PPD_PROBE_RESULT_FAIL;
-  status = g_strchomp (status);
-  if (g_strcmp0 (status, "active") != 0) {
-    g_debug ("AMD P-State is not running in active mode");
-    return PPD_PROBE_RESULT_FAIL;
-  }
 
   policy_dir = ppd_utils_get_sysfs_path (CPUFREQ_POLICY_DIR);
   dir = g_dir_open (policy_dir, 0, NULL);
@@ -200,9 +194,20 @@ apply_pref_to_devices (GPtrArray   *devices,
   const char *gov_pref;
   const char *cpb_pref;
   const char *min_freq;
+  g_autofree char *status = NULL;
+  g_autofree char *pstate_status_path = NULL;
 
   if (profile == PPD_PROFILE_UNSET)
     return TRUE;
+
+  pstate_status_path = ppd_utils_get_sysfs_path (PSTATE_STATUS_PATH);
+  if (!g_file_get_contents (pstate_status_path, &status, NULL, error))
+    return FALSE;
+  status = g_strchomp (status);
+  if (g_strcmp0 (status, "active") != 0) {
+    g_warning ("AMD P-State is not in active mode");
+    return TRUE;
+  }
 
   epp_pref = profile_to_epp_pref (profile, battery);
   gov_pref = profile_to_gov_pref (profile);
