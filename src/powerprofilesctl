@@ -67,6 +67,13 @@ def get_profiles_property(prop):
     return proxy.Get("(ss)", PP_IFACE, prop)
 
 
+def get_profile_choices():
+    try:
+        return [profile["Profile"] for profile in get_profiles_property("Profiles")]
+    except GLib.Error:
+        return []
+
+
 @command
 def _list(_args):
     profiles = get_profiles_property("Profiles")
@@ -181,7 +188,7 @@ def get_parser():
         "profile",
         nargs=1,
         help="Profile to use for set command",
-        choices=[profile["Profile"] for profile in get_profiles_property("Profiles")],
+        choices=get_profile_choices(),
     )
     parser_set.set_defaults(func=_set)
     parser_launch = subparsers.add_parser(
