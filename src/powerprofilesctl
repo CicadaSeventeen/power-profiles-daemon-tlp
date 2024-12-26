@@ -181,7 +181,7 @@ def get_parser():
         "profile",
         nargs=1,
         help="Profile to use for set command",
-        choices=[profile["Profile"] for profile in get_profiles_property("Profiles")]
+        choices=[profile["Profile"] for profile in get_profiles_property("Profiles")],
     )
     parser_set.set_defaults(func=_set)
     parser_launch = subparsers.add_parser(
