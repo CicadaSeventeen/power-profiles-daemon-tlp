@@ -13,8 +13,9 @@ stages:
 
 .ppd.fedora:
   variables:
+    FDO_UPSTREAM_REPO: upower/power-profiles-daemon
     FDO_DISTRIBUTION_VERSION: 41
-    FDO_DISTRIBUTION_TAG: '2024-09-03.1'
+    FDO_DISTRIBUTION_TAG: '2025-01-01.0'
     TMPDIR: $CI_BUILDS_DIR/tmpdir
 
 .ppd.fedora.build:
