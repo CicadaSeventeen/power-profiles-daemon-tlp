@@ -449,7 +449,7 @@ class Tests(dbusmock.DBusTestCase):
             + f"but '{self.read_file_contents(path)}'",
         )
 
-    # pylint: disable=too-many-arguments,too-many-positional-arguments
+    # pylint: disable=too-many-arguments,unknown-option-value,too-many-positional-arguments
     def assert_sysfs_attr_eventually_is(
         self, device, attribute, contents, timeout=800, keep_checking=0
     ):
