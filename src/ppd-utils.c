@@ -72,6 +72,10 @@ ppd_utils_write (const char  *filename,
     size -= written;
   }
 
+#if !GLIB_CHECK_VERSION (2, 76, 0)
+  g_close (fd, NULL);
+#endif
+
   return TRUE;
 }
 
