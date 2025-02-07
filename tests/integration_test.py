@@ -322,7 +322,10 @@ class Tests(dbusmock.DBusTestCase):
             if not GLib.find_program_in_path("chattr"):
                 self.skipTest("chattr is not found")
 
-            subprocess.check_output(["chattr", f"{attr}i", fname])
+            try:
+                subprocess.check_output(["chattr", f"{attr}i", fname])
+            except subprocess.CalledProcessError as e:
+                self.skipTest(f"chattr is not supported: {e.output}")
         if not enable:
             os.chmod(fname, 0o666)
 
