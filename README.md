@@ -13,7 +13,7 @@ It requires libgudev, systemd and polkit-gobject.
 
 ## Introduction
 
-power-profiles-daemon offers to modify system behaviour based upon user-selected
+power-profiles-daemon offers to modify system behavior based upon user-selected
 power profiles. There are 3 different power profiles, a "balanced" default mode,
 a "power-saver" mode, as well as a "performance" mode. The first 2 of those are
 available on every system. The "performance" mode is only available on select
