@@ -325,8 +325,8 @@ class Tests(dbusmock.DBusTestCase):
 
             try:
                 subprocess.check_output(["chattr", f"{attr}i", fname])
-            except subprocess.CalledProcessError as e:
-                self.skipTest(f"chattr is not supported: {e.output}")
+            except subprocess.CalledProcessError as error:
+                self.skipTest(f"chattr is not supported: {error.output}")
         if not enable:
             os.chmod(fname, 0o666)
 
