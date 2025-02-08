@@ -2120,8 +2120,10 @@ class Tests(dbusmock.DBusTestCase):
             retcode = launch_process.wait()
             self.assertEqual(retcode, -signal.SIGTERM)
 
-        holds = self.get_dbus_property("ActiveProfileHolds")
-        self.assertEqual(len(holds), 0)
+        self.assert_eventually(
+            lambda: len(self.get_dbus_property("ActiveProfileHolds")) == 0,
+            message=lambda: f"Holds are {self.get_dbus_property('ActiveProfileHolds')}",
+        )
 
     def test_launch_sigint_wrapper(self):
         self.create_platform_profile()
