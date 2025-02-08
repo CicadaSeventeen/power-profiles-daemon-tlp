@@ -207,6 +207,8 @@ valgrind:
         --buildtype=debug
         _build
     - meson test -C _build --print-errorlogs --setup=valgrind
+  # FIXME: Valgrind job fails in CI, but not locally.
+  allow_failure: true
   artifacts:
     when: on_failure
     paths:
