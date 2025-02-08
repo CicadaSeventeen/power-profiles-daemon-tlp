@@ -3,7 +3,7 @@
 include:
   - project: 'freedesktop/ci-templates'
     ref: *templates_sha
-    file: '/templates/fedora.yml'
+    file: '/templates/ubuntu.yml'
 
 stages:
   - prep
@@ -11,96 +11,96 @@ stages:
   - test
   - deploy
 
-.ppd.fedora:
+.ppd.ubuntu:
   variables:
     FDO_UPSTREAM_REPO: upower/power-profiles-daemon
-    FDO_DISTRIBUTION_VERSION: 41
-    FDO_DISTRIBUTION_TAG: '2025-01-01.0'
+    FDO_DISTRIBUTION_VERSION: '24.10'
+    FDO_DISTRIBUTION_TAG: '2025-01-01.2'
 
-.ppd.fedora.build:
+.ppd.ubuntu.build:
   extends:
-  - .fdo.container-build@fedora
-  - .ppd.fedora
+  - .fdo.container-build@ubuntu
+  - .ppd.ubuntu
   stage: prep
   variables:
-    FDO_DISTRIBUTION_PACKAGES: argparse-manpage
-                               bash-completion-devel
-                               clang-analyzer
-                               e2fsprogs
-                               gcc
+    FDO_DISTRIBUTION_PACKAGES: bash-completion
+                               clang-tools
                                gcovr
+                               gcc
                                git
-                               glib-devel
-                               glib2
-                               glibc
-                               gtk-doc
-                               libasan
-                               libgudev
-                               libgudev-devel
-                               libubsan
+                               gtk-doc-tools
+                               libglib2.0-dev
+                               libgudev-1.0-dev
+                               libpolkit-gobject-1-dev
+                               libudev-dev
+                               libumockdev-dev
+                               libupower-glib-dev
+                               libxml2-utils
+                               lsb-release
                                meson
-                               polkit-devel
-                               polkit-libs
-                               pre-commit
+                               pylint
+                               python3-argparse-manpage
                                python3-coverage
+                               python3-dbus
                                python3-dbusmock
-                               python3-gobject
-                               python3-gobject
-                               python3-packaging
-                               python3-pylint
+                               python3-gi
                                python3-shtab
-                               systemd
-                               systemd-devel
+                               python3-pip
+                               systemd-dev
+                               ubuntu-dbgsym-keyring
                                umockdev
-                               upower
-                               upower-devel
                                valgrind
-                               which
-    DEBUG_DEPS: glib2
-                glibc
-                libgudev
-                upower
-                polkit-libs
+    DEBUG_DEPS: libglib2.0-0t64-dbgsym
+                libc6-dbg
+                libgudev-1.0-0-dbgsym
+                libupower-glib3-dbgsym
+                libpolkit-gobject-1-0-dbgsym
     FDO_DISTRIBUTION_EXEC: |
-      dnf install -y --setopt=protected_packages= "dnf-command(debuginfo-install)";
-      dnf debuginfo-install -y $DEBUG_DEPS;
+      echo "deb http://ddebs.ubuntu.com $(lsb_release -cs) main restricted universe multiverse
+        deb http://ddebs.ubuntu.com $(lsb_release -cs)-updates main restricted universe multiverse
+        deb http://ddebs.ubuntu.com $(lsb_release -cs)-proposed main restricted universe multiverse" | \
+        tee -a /etc/apt/sources.list.d/ddebs.list
+      apt update -y
+      apt install -y $DEBUG_DEPS
 
-build-fedora-container:
+      pip3 install --break-system-packages pre-commit
+
+build-ubuntu-container:
   extends:
-    - .ppd.fedora.build
+    - .ppd.ubuntu.build
   only:
     variables:
       - $CI_PIPELINE_SOURCE != "schedule" &&
         $PPD_CI_ACTION != "build-image"
 
-.ppd.fedora.force-rebuild:
+.ppd.ubuntu.force-rebuild:
   variables:
     FDO_FORCE_REBUILD: 1
 
-build-fedora-container-schedule:
+build-ubuntu-container-schedule:
   extends:
-    - .ppd.fedora.force-rebuild
-    - .ppd.fedora.build
+    - .ppd.ubuntu.force-rebuild
+    - .ppd.ubuntu.build
   only:
     variables:
       - $CI_PIPELINE_SOURCE == "schedule" && $CRON_TASK == "BUILD_CI_IMAGES"
 
-build-fedora-container-manual:
+build-ubuntu-container-manual:
   extends:
-    - .ppd.fedora.force-rebuild
-    - .ppd.fedora.build
+    - .ppd.ubuntu.force-rebuild
+    - .ppd.ubuntu.build
   only:
     variables:
       - $PPD_CI_ACTION == "build-image"
 
-.ppd.fedora.base:
+.ppd.ubuntu.base:
   extends:
-    - .ppd.fedora
-    - .fdo.distribution-image@fedora
+    - .ppd.ubuntu
+    - .fdo.distribution-image@ubuntu
 
-.ppd.fedora.test:
+.ppd.ubuntu.test:
   extends:
-    - .ppd.fedora.base
+    - .ppd.ubuntu.base
   before_script:
     - echo 8096000 > /proc/sys/fs/inotify/max_user_instances
 
@@ -114,13 +114,13 @@ workflow:
 pre_commit:
   stage: pre-commit
   extends:
-    - .ppd.fedora.base
+    - .ppd.ubuntu.base
   script:
     - pre-commit run --all-files
 
 build_and_test:
   extends:
-    - .ppd.fedora.test
+    - .ppd.ubuntu.test
   script:
     - meson setup
         --werror
@@ -129,17 +129,17 @@ build_and_test:
         -Dpylint=enabled
         -Db_coverage=true
         _build
-    - meson test -C _build --print-errorlogs
+    - meson test -C _build --print-errorlogs -v
     - .ci/fail_skipped_tests.py _build/meson-logs/testlog.junit.xml
     - ninja -C _build coverage
     - python_coverage_data=_build/meson-logs/python.coverage
-    - coverage3 combine --data-file=$python_coverage_data
+    - python3-coverage combine --data-file=$python_coverage_data
         _build/python-coverage/*
-    - coverage3 xml --data-file=$python_coverage_data
+    - python3-coverage xml --data-file=$python_coverage_data
         -o $python_coverage_data.xml
     - sed "s,_build/src/,src/,g" -i $python_coverage_data.xml
-    - coverage3 report --data-file=$python_coverage_data
-    - coverage3 html --data-file=$python_coverage_data
+    - python3-coverage report --data-file=$python_coverage_data
+    - python3-coverage html --data-file=$python_coverage_data
         -d _build/meson-logs/python-coverage-html
     - cat _build/meson-logs/coverage.txt || true
   artifacts:
@@ -160,7 +160,7 @@ build_and_test:
 
 dist_install:
   extends:
-    - .ppd.fedora.test
+    - .ppd.ubuntu.test
   script:
     - meson setup
         --werror
@@ -185,7 +185,7 @@ dist_install:
 
 address_sanitizer:
   extends:
-    - .ppd.fedora.test
+    - .ppd.ubuntu.test
   script:
     - meson setup
         --werror
@@ -200,7 +200,7 @@ address_sanitizer:
 
 valgrind:
   extends:
-    - .ppd.fedora.test
+    - .ppd.ubuntu.test
   script:
     - meson setup
         --werror
@@ -216,7 +216,7 @@ valgrind:
 
 scan_build:
   extends:
-    - .ppd.fedora.base
+    - .ppd.ubuntu.base
   script:
     - meson setup _build -Dtests=false
     - env SCANBUILD=$(which scan-build) ninja -C _build scan-build
@@ -227,7 +227,7 @@ scan_build:
 
 docs:
   extends:
-    - .ppd.fedora.base
+    - .ppd.ubuntu.base
   script:
     - meson setup
         -Dgtk_doc=true
