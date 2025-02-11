@@ -67,6 +67,12 @@ set_charge_type (PpdActionTrickleCharge *action,
     if (!value)
       continue;
 
+    if (g_strcmp0 (value, "Custom") == 0) {
+      g_debug ("Not setting charge type for '%s' due to 'Custom'",
+               g_udev_device_get_sysfs_path (dev));
+      continue;
+    }
+
     if (g_strcmp0 (charge_type, value) == 0)
       continue;
 
@@ -115,7 +121,7 @@ uevent_cb (GUdevClient *client,
   g_debug ("Updating charge type for '%s' to '%s'",
            g_udev_device_get_sysfs_path (device),
            charge_type);
-  ppd_utils_write_sysfs (device, CHARGE_TYPE_SYSFS_NAME, charge_type, NULL);
+  set_charge_type (self, charge_type);
 }
 
 static void

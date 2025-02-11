@@ -314,6 +314,16 @@ class Tests(dbusmock.DBusTestCase):
                 contents if isinstance(contents, bytes) else contents.encode("utf-8")
             )
 
+    def write_sysfs_file(self, path, contents):
+        """Writes a sysfs file"""
+        return self.write_file_contents(
+            self.testbed.get_root_dir() + "/" + path, contents
+        )
+
+    def write_sysfs_attr(self, device, attribute, contents):
+        """Writes a sysfs attribute"""
+        return self.write_sysfs_file(device + "/" + attribute, contents)
+
     def change_immutable(self, fname, enable):
         attr = "-"
         if enable:
@@ -1775,6 +1785,41 @@ class Tests(dbusmock.DBusTestCase):
 
         # verify power saver didn't get updated for it
         self.assert_sysfs_attr_eventually_is(edp3, amdgpu_panel_power_savings, "0")
+
+    def test_custom_trickle_charge_device(self):
+        """Attempt to Trickle power_supply charge type, but already set to Custom"""
+
+        fastcharge = self.testbed.add_device(
+            "power_supply",
+            "bq24190-charger",
+            None,
+            ["charge_type", "Custom", "scope", "Device"],
+            [],
+        )
+
+        self.start_daemon()
+
+        self.assert_action_enabled("trickle_charge")
+
+        # Verify that charge-type stays untouched
+        self.assertEqual(self.read_sysfs_attr(fastcharge, "charge_type"), b"Custom")
+
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("power-saver"))
+        self.assert_sysfs_attr_eventually_is(fastcharge, "charge_type", "Custom")
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("balanced"))
+        self.assert_sysfs_attr_eventually_is(fastcharge, "charge_type", "Custom")
+
+        # verify charge type is touched again
+        self.write_sysfs_attr(fastcharge, "charge_type", "Fast")
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("power-saver"))
+        self.assert_sysfs_attr_eventually_is(fastcharge, "charge_type", "Trickle")
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("balanced"))
+        self.assert_sysfs_attr_eventually_is(fastcharge, "charge_type", "Fast")
+
+        # verify it's not touched again
+        self.write_sysfs_attr(fastcharge, "charge_type", "Custom")
+        self.set_dbus_property("ActiveProfile", GLib.Variant.new_string("power-saver"))
+        self.assert_sysfs_attr_eventually_is(fastcharge, "charge_type", "Custom")
 
     def test_trickle_charge_system(self):
         """Trickle power_supply charge type"""
