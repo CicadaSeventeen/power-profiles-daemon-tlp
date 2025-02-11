@@ -377,6 +377,15 @@ class Tests(dbusmock.DBusTestCase):
             "low-power balanced performance\n",
         )
 
+    def create_custom_platform_profile(self):
+        acpi_dir = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
+        os.makedirs(acpi_dir, exist_ok=True)
+        self.write_file_contents(os.path.join(acpi_dir, "platform_profile"), "custom\n")
+        self.write_file_contents(
+            os.path.join(acpi_dir, "platform_profile_choices"),
+            "low-power balanced performance custom\n",
+        )
+
     def remove_platform_profile(self):
         acpi_dir = os.path.join(self.testbed.get_root_dir(), "sys/firmware/acpi/")
         os.remove(os.path.join(acpi_dir, "platform_profile_choices"))
@@ -1982,6 +1991,18 @@ class Tests(dbusmock.DBusTestCase):
         self.assertEqual(self.get_dbus_property("ActiveProfile"), "power-saver")
         self.assertEqual(
             self.read_sysfs_file("sys/firmware/acpi/platform_profile"), b"quiet"
+        )
+
+    def test_custom_acpi_platform_profile(self):
+        self.create_custom_platform_profile()
+        self.start_daemon()
+        profiles = self.get_dbus_property("Profiles")
+        self.assertEqual(len(profiles), 3)
+        self.assertEqual(profiles[0]["PlatformDriver"], "platform_profile")
+
+        # make sure PPD overrides it
+        self.assertEqual(
+            self.read_sysfs_file("sys/firmware/acpi/platform_profile"), b"balanced"
         )
 
     def test_hold_release_profile(self):

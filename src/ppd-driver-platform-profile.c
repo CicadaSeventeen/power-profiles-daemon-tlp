@@ -81,19 +81,23 @@ acpi_platform_profile_value_to_profile (const char *str)
   if (str == NULL)
     return PPD_PROFILE_UNSET;
 
-  switch (str[0]) {
-  case 'l': /* low-power */
-  case 'q': /* quiet */
+  if (g_str_equal (str, "custom"))
+    return PPD_PROFILE_UNSET;
+
+  if (g_str_equal (str, "low-power") ||
+      g_str_equal (str, "quiet"))
     return PPD_PROFILE_POWER_SAVER;
-  case 'c': /* cool */
-  case 'b':
+
+  if (g_str_equal (str, "balanced") ||
+      g_str_equal (str, "balanced_performance") ||
+      g_str_equal (str, "cool"))
     return PPD_PROFILE_BALANCED;
-  case 'p':
+
+  if (g_str_equal (str, "performance"))
     return PPD_PROFILE_PERFORMANCE;
-  default:
-    g_debug ("Unhandled ACPI platform profile '%c'", str[0]);
-    g_return_val_if_reached (PPD_PROFILE_UNSET);
-  }
+
+  g_debug ("Unhandled ACPI platform profile '%s'", str);
+  g_return_val_if_reached (PPD_PROFILE_UNSET);
 }
 
 static PpdProfile
@@ -113,9 +117,9 @@ read_platform_profile (void)
     return PPD_PROFILE_UNSET;
   }
 
-  new_profile = acpi_platform_profile_value_to_profile (new_profile_str);
-  g_debug ("ACPI performance_profile is now %c, so profile is detected as %s",
-           new_profile_str[0],
+  new_profile = acpi_platform_profile_value_to_profile (g_strchomp (new_profile_str));
+  g_debug ("ACPI performance_profile is now '%s', so profile is detected as %s",
+           g_strchomp (new_profile_str),
            ppd_profile_to_str (new_profile));
   return new_profile;
 }
