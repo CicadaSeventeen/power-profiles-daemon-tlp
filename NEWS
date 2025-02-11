@@ -1,3 +1,15 @@
+0.30
+----
+
+Add support for configuring actions to be enabled or disabled over dbus:
+  - Actions can be listed via `powerprofilesctl list-actions`
+  - These can be controlled via `powerprofilesctl configure-action`
+Add support for configuring whether PPD reacts to battery/AC charger events:
+  - It can be queried and controlled via:
+    `powerprofilesctl query-battery-aware` and
+    `powerprofilesctl configure-battery-aware`
+Add better better compatibility with kernel 6.14.
+
 0.23
 ----
 
