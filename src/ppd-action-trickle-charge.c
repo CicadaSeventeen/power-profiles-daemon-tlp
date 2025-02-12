@@ -50,13 +50,13 @@ static void
 set_charge_type (PpdActionTrickleCharge *action,
                  const char             *charge_type)
 {
-  GList *devices, *l;
+  g_autolist (GUdevDevice) devices = NULL;
 
   devices = g_udev_client_query_by_subsystem (action->client, "power_supply");
   if (devices == NULL)
     return;
 
-  for (l = devices; l != NULL; l = l->next) {
+  for (GList *l = devices; l != NULL; l = l->next) {
     GUdevDevice *dev = l->data;
     const char *value;
 
@@ -80,8 +80,6 @@ set_charge_type (PpdActionTrickleCharge *action,
 
     break;
   }
-
-  g_list_free_full (devices, g_object_unref);
 }
 
 static gboolean
