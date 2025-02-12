@@ -17,12 +17,21 @@
 
 #define CHARGE_TYPE_SYSFS_NAME "charge_type"
 
+typedef enum {
+  PPD_CHARGE_TYPE_UNKNOWN,
+  PPD_CHARGE_TYPE_STANDARD,
+  PPD_CHARGE_TYPE_FAST,
+  PPD_CHARGE_TYPE_TRICKLE,
+  PPD_CHARGE_TYPE_CUSTOM,
+  PPD_CHARGE_TYPE_ADAPTIVE,
+} PpdChargeType;
+
 struct _PpdActionTrickleCharge
 {
   PpdAction  parent_instance;
 
   GUdevClient *client;
-  gboolean active;
+  PpdChargeType charge_type;
 };
 
 G_DEFINE_TYPE (PpdActionTrickleCharge, ppd_action_trickle_charge, PPD_TYPE_ACTION)
@@ -46,15 +55,55 @@ ppd_action_trickle_charge_constructor (GType                  type,
   return object;
 }
 
+PpdChargeType
+ppd_string_to_charge_type (const gchar *str)
+{
+  if (g_str_equal (str, "Standard"))
+    return PPD_CHARGE_TYPE_STANDARD;
+  if (g_str_equal (str, "Fast"))
+    return PPD_CHARGE_TYPE_FAST;
+  if (g_str_equal (str, "Trickle"))
+    return PPD_CHARGE_TYPE_TRICKLE;
+  if (g_str_equal (str, "Custom"))
+    return PPD_CHARGE_TYPE_CUSTOM;
+  if (g_str_equal (str, "Adaptive"))
+    return PPD_CHARGE_TYPE_ADAPTIVE;
+
+  return PPD_CHARGE_TYPE_UNKNOWN;
+}
+
+static const char *
+ppd_charge_type_to_string (PpdChargeType charge_type)
+{
+  switch (charge_type) {
+  case PPD_CHARGE_TYPE_STANDARD:
+    return "Standard";
+  case PPD_CHARGE_TYPE_FAST:
+    return "Fast";
+  case PPD_CHARGE_TYPE_TRICKLE:
+    return "Trickle";
+  case PPD_CHARGE_TYPE_CUSTOM:
+    return "Custom";
+  case PPD_CHARGE_TYPE_ADAPTIVE:
+    return "Adaptive";
+  default:
+    return "Unknown";
+  }
+}
+
 static void
 set_charge_type (PpdActionTrickleCharge *action,
-                 const char             *charge_type)
+                 PpdChargeType           charge_type)
 {
+  PpdActionTrickleCharge *self = PPD_ACTION_TRICKLE_CHARGE (action);
   g_autolist (GUdevDevice) devices = NULL;
+  const char *charge_type_value;
 
   devices = g_udev_client_query_by_subsystem (action->client, "power_supply");
   if (devices == NULL)
     return;
+
+  charge_type_value = ppd_charge_type_to_string (charge_type);
 
   for (GList *l = devices; l != NULL; l = l->next) {
     GUdevDevice *dev = l->data;
@@ -67,19 +116,23 @@ set_charge_type (PpdActionTrickleCharge *action,
     if (!value)
       continue;
 
-    if (g_strcmp0 (value, "Custom") == 0) {
-      g_debug ("Not setting charge type for '%s' due to 'Custom'",
-               g_udev_device_get_sysfs_path (dev));
+    if (g_str_equal (value, charge_type_value))
       continue;
+
+    switch (ppd_string_to_charge_type (value)) {
+    case PPD_CHARGE_TYPE_CUSTOM:
+    case PPD_CHARGE_TYPE_ADAPTIVE:
+      g_debug ("Not setting charge type for '%s' due to '%s'",
+               g_udev_device_get_sysfs_path (dev), value);
+      break;
+
+    default:
+      ppd_utils_write_sysfs (dev, CHARGE_TYPE_SYSFS_NAME, charge_type_value, NULL);
+      break;
     }
-
-    if (g_strcmp0 (charge_type, value) == 0)
-      continue;
-
-    ppd_utils_write_sysfs (dev, CHARGE_TYPE_SYSFS_NAME, charge_type, NULL);
-
-    break;
   }
+
+  self->charge_type = charge_type;
 }
 
 static gboolean
@@ -88,14 +141,25 @@ ppd_action_trickle_charge_activate_profile (PpdAction   *action,
                                             GError     **error)
 {
   PpdActionTrickleCharge *self = PPD_ACTION_TRICKLE_CHARGE (action);
+  PpdChargeType charge_type;
 
-  if (profile == PPD_PROFILE_POWER_SAVER) {
-    set_charge_type (self, "Trickle");
-    self->active = TRUE;
-  } else {
-    set_charge_type (self, "Fast");
-    self->active = FALSE;
+  switch (profile) {
+  case PPD_PROFILE_POWER_SAVER:
+    charge_type = PPD_CHARGE_TYPE_TRICKLE;
+    break;
+  case PPD_PROFILE_BALANCED:
+    charge_type = PPD_CHARGE_TYPE_STANDARD;
+    break;
+  case PPD_PROFILE_PERFORMANCE:
+    charge_type = PPD_CHARGE_TYPE_FAST;
+    break;
+  default:
+    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                 "Unknown profile %d", profile);
+    return FALSE;
   }
+
+  set_charge_type (self, charge_type);
 
   return TRUE;
 }
@@ -107,7 +171,6 @@ uevent_cb (GUdevClient *client,
            gpointer     user_data)
 {
   PpdActionTrickleCharge *self = user_data;
-  const char *charge_type;
 
   if (g_strcmp0 (action, "add") != 0)
     return;
@@ -115,11 +178,7 @@ uevent_cb (GUdevClient *client,
   if (!g_udev_device_has_sysfs_attr (device, CHARGE_TYPE_SYSFS_NAME))
     return;
 
-  charge_type = self->active ? "Trickle" : "Fast";
-  g_debug ("Updating charge type for '%s' to '%s'",
-           g_udev_device_get_sysfs_path (device),
-           charge_type);
-  set_charge_type (self, charge_type);
+  set_charge_type (self, self->charge_type);
 }
 
 static void
