@@ -1,6 +1,6 @@
 configure_file(
   input: 'power-profiles-daemon.service.in',
-  output: 'power-profiles-daemon.service',
+  output: 'ppd-tlp.service',
   configuration: {
     'libexecdir': libexecdir,
   },

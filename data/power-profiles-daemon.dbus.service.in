@@ -8,4 +8,4 @@
 Name=@dbus_name@
 Exec=/bin/false
 User=root
-SystemdService=power-profiles-daemon.service
+SystemdService=ppd-tlp.service

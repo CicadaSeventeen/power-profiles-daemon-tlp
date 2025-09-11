@@ -10,10 +10,6 @@ option('pylint',
        type: 'feature',
        value: 'auto',
        description: 'Run pylint checks, for developers only')
-option('tests',
-       description: 'Whether to run tests',
-       type: 'boolean',
-       value: true)
 option('manpage',
        description: 'generate powerprofilesctl man page',
        type: 'feature',
