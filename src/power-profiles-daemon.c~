@@ -20,7 +20,7 @@
 
 #include "power-profiles-daemon-resources.h"
 #include "power-profiles-daemon.h"
-#include "ppd-driver-cpu.h"
+//#include "ppd-driver-cpu.h"
 #include "ppd-driver-platform.h"
 #include "ppd-action.h"
 #include "ppd-enums.h"
