@@ -17,7 +17,7 @@
 
 
 Name:           ppd-tlp
-Version:        0.30
+Version:        0.30.2
 Release:        0
 Summary:        A fork of power-profiles-daemon to use tlp as backend.
 License:        GPL-3.0-or-later
