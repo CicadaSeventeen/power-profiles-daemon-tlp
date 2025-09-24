@@ -142,15 +142,18 @@ static void upower_battery_set_power_changed_reason (PpdApp *, PpdPowerChangedRe
 #include "ppd-driver-placeholder.h"
 //#include "ppd-driver-platform-profile.h"
 #include "ppd-driver-fake.h"
+#include "ppd-driver-tlpmm.h"
 #include "ppd-driver-tlp.h"
+#include "ppd-driver-pwrmdr.h"
 
 typedef GType (*GTypeGetFunc) (void);
 
 static GTypeGetFunc objects[] = {
   /* Hardware specific profile drivers */
   ppd_driver_fake_get_type,
+   ppd_driver_pwrmdr_get_type,
+  ppd_driver_tlpmm_get_type,
   ppd_driver_tlp_get_type,
-
   /* Generic profile driver */
   ppd_driver_placeholder_get_type,
 

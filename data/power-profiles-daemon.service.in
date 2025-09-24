@@ -2,7 +2,8 @@
 Description=Power Profiles daemon
 Conflicts=tuned.service auto-cpufreq.service system76-power.service
 Before=graphical.target display-manager.target
-After=tlp.service
+After=tlp.service tlp-multimode-init.service
+Wants=tlp.service
 
 [Service]
 Type=dbus

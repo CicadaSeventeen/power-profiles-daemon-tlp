@@ -90,6 +90,8 @@ sources += [
   'power-profiles-daemon.c',
   'ppd-driver-placeholder.c',
   'ppd-driver-fake.c',
+  'ppd-driver-pwrmdr.c',
+  'ppd-driver-tlpmm.c',
   'ppd-driver-tlp.c',
 ]
 
