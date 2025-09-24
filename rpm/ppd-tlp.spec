@@ -46,6 +46,7 @@ BuildRequires:  pkgconfig(upower-glib)
 Requires:       polkit
 Requires:       tlp
 Requires:       python3-gobject
+Recommends:     tlp-multimode
 Conflicts:      ppd-service
 Conflicts:      power-profiles-daemon
 
